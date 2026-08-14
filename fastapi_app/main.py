@@ -1,6 +1,7 @@
 # FastAPI Application for MediDemand
 # Designed for deployment locally, with Cloudflare Tunnel (cloudflared), or Docker
 import os
+import re
 import sqlite3
 import hashlib
 from datetime import datetime
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="MediDemand",
     description="Hospital & Primary Care Healthcare Drug Forecasting Platform - MAG Healthcare Solutions",
-    version="4.8.0"
+    version="4.9.0"
 )
 
 app.add_middleware(
@@ -106,7 +107,6 @@ class ForecastOutput(BaseModel):
     drug: Optional[str] = None
 
 def calculate_forecast_logic(avg_monthly: float, current_stock: float = 0.0, lead_days: float = 45.0, safety_buffer_pct: float = 10.0) -> int:
-    # Daily consumption = Monthly / 30 days
     daily_demand = avg_monthly / 30.0
     raw_demand = daily_demand * lead_days
     safety_stock = raw_demand * (safety_buffer_pct / 100.0)
@@ -264,9 +264,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         </div>
 
                         <div>
-                            <label id="i18n-labelDrug" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">اسم الصنف الدوائي (Drug Name)</label>
-                            <input type="text" id="drugName" required placeholder="مثال: Ceftriaxone 1g Vial"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label id="i18n-labelDrug" class="block text-xs font-bold text-slate-700 dark:text-slate-300">اسم الصنف الدوائي (بالإنجليزية فقط - English Only)</label>
+                                <span class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">English Only</span>
+                            </div>
+                            <input type="text" id="drugName" required placeholder="e.g. Ceftriaxone 1g Vial / Paracetamol 500mg" dir="ltr"
+                                oninput="onDrugNameInput(this)"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-sans">
+                            <p id="drugNameError" class="hidden text-[11px] text-rose-500 dark:text-rose-400 font-bold mt-1.5 flex items-center gap-1.5 animate-pulse">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span id="i18n-drugNameError">يجب كتابة اسم الصنف الدوائي بالحروف الإنجليزية فقط (English Letters Only)</span>
+                            </p>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
@@ -392,7 +400,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="flex items-center gap-2">
                 <img src="/logo.png" alt="MAG" class="h-5 w-5 object-contain">
                 <span class="font-bold text-slate-700 dark:text-slate-300">MAG Healthcare Solutions</span>
-                <span>• MediDemand v4.8</span>
+                <span>• MediDemand v4.9</span>
             </div>
             <div>
                 <span>جميع الحقوق محفوظة © 2026</span>
@@ -505,8 +513,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 placeholderFacility: "مثال: مستشفى الكرنك الدولي / مركز الدير",
                 labelUser: "اسم المستخدم / الصيدلي المسؤول",
                 placeholderUser: "مثال: د. فاطمة",
-                labelDrug: "اسم الصنف الدوائي (Drug Name)",
-                placeholderDrug: "مثال: Ceftriaxone 1g Vial",
+                labelDrug: "اسم الصنف الدوائي (بالإنجليزية فقط - English Only)",
+                placeholderDrug: "e.g. Ceftriaxone 1g Vial / Paracetamol 500mg",
+                drugNameError: "يجب كتابة اسم الصنف الدوائي بالحروف الإنجليزية فقط (English Letters Only)",
                 labelAvgMonthly: "متوسط الاستهلاك الشهري",
                 labelStock: "الرصيد الحالي بالمخزن",
                 labelLead: "فترة التغطية (بالأيام)",
@@ -552,6 +561,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 toastLoginOk: "تم تسجيل الدخول بنجاح. مرحباً بك د. {name}",
                 toastRegisterOk: "تم إنشاء الحساب بنجاح وتسجيل الدخول",
                 toastLogoutOk: "تم تسجيل الخروج",
+                toastDrugMustBeEnglish: "يرجى كتابة اسم الصنف باللغة الإنجليزية فقط (English Letters Only)",
                 
                 toastSavedOk: "تم حفظ طلبية الصنف ({drug}) بكمية مقترحة: {qty}",
                 toastSavedLocal: "تم الحفظ محلياً (تعذر الاتصال بالخادم)",
@@ -574,8 +584,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 placeholderFacility: "e.g. Karnak International Hospital",
                 labelUser: "User / Responsible Pharmacist",
                 placeholderUser: "e.g. Dr. Fatima",
-                labelDrug: "Drug Name / Formulation",
-                placeholderDrug: "e.g. Ceftriaxone 1g Vial",
+                labelDrug: "Drug Name / Formulation (English Only)",
+                placeholderDrug: "e.g. Ceftriaxone 1g Vial / Paracetamol 500mg",
+                drugNameError: "Drug name must be entered in English letters only",
                 labelAvgMonthly: "Avg Monthly Consumption",
                 labelStock: "Current Stock on Hand",
                 labelLead: "Coverage Time (Days)",
@@ -621,6 +632,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 toastLoginOk: "Signed in successfully. Welcome Dr. {name}",
                 toastRegisterOk: "Account created and signed in successfully",
                 toastLogoutOk: "Signed out successfully",
+                toastDrugMustBeEnglish: "Drug name must be in English letters only",
 
                 toastSavedOk: "Order saved for ({drug}) with recommended qty: {qty}",
                 toastSavedLocal: "Saved locally (server offline)",
@@ -628,6 +640,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 csvHeader: "\uFEFFDate & Time,Facility Name,User Name,Drug Name,Avg Monthly Consumption,Recommended Quantity\n"
             }
         };
+
+        function onDrugNameInput(input) {
+            const hasArabic = /[\u0600-\u06FF]/.test(input.value);
+            const err = document.getElementById('drugNameError');
+            if (hasArabic) {
+                if (err) err.classList.remove('hidden');
+                input.classList.add('border-rose-500', 'focus:ring-rose-500', 'bg-rose-50/20');
+            } else {
+                if (err) err.classList.add('hidden');
+                input.classList.remove('border-rose-500', 'focus:ring-rose-500', 'bg-rose-50/20');
+            }
+        }
 
         function setLanguage(lang) {
             currentLang = lang;
@@ -661,6 +685,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('userName').placeholder = t.placeholderUser;
             document.getElementById('i18n-labelDrug').textContent = t.labelDrug;
             document.getElementById('drugName').placeholder = t.placeholderDrug;
+            document.getElementById('i18n-drugNameError').textContent = t.drugNameError;
             document.getElementById('i18n-labelAvgMonthly').textContent = t.labelAvgMonthly;
             document.getElementById('i18n-labelStock').textContent = t.labelStock;
             document.getElementById('i18n-labelLead').textContent = t.labelLead;
@@ -973,7 +998,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             showToast(t.toastLogoutOk);
         }
 
-        // New Precise Days-Based Formula
+        // Days-Based Formula
         function computeForecast(avgMonthly, currentStock, leadDays, safetyBufferPercent) {
             const dailyDemand = avgMonthly / 30.0;
             const rawDemand = dailyDemand * leadDays;
@@ -1002,8 +1027,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const stock = parseFloat(document.getElementById('currentStock').value) || 0;
             const days = parseFloat(document.getElementById('leadDays').value) || 45;
             const buffer = parseFloat(document.getElementById('safetyBuffer').value) || 10;
-            const recQty = computeForecast(avg, stock, days, buffer);
             const t = translations[currentLang];
+
+            // Validation: Drug name MUST be in English only
+            if (/[\u0600-\u06FF]/.test(drug)) {
+                showToast(t.toastDrugMustBeEnglish, true);
+                const drugInput = document.getElementById('drugName');
+                if (drugInput) {
+                    drugInput.focus();
+                    onDrugNameInput(drugInput);
+                }
+                return;
+            }
+
+            const recQty = computeForecast(avg, stock, days, buffer);
 
             const payload = {
                 facility_name: facility,
@@ -1022,6 +1059,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
+                if (!res.ok) {
+                    showToast(data.detail || 'Error saving order', true);
+                    return;
+                }
                 const msg = t.toastSavedOk.replace('{drug}', drug).replace('{qty}', data.recommended_qty);
                 showToast(msg);
                 await refreshData();
@@ -1044,6 +1085,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
 
             document.getElementById('drugName').value = '';
+            const errEl = document.getElementById('drugNameError');
+            if (errEl) errEl.classList.add('hidden');
             document.getElementById('avgMonthly').value = '';
             document.getElementById('currentStock').value = '';
             liveUpdateCalculation();
@@ -1071,7 +1114,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">${r.timestamp || '-'}</td>
                     <td class="py-3 px-3 font-semibold text-slate-800 dark:text-slate-100">${r.facilityName || '-'}</td>
                     <td class="py-3 px-3 text-slate-600 dark:text-slate-300">${r.userName || '-'}</td>
-                    <td class="py-3 px-3 font-bold text-slate-900 dark:text-white">${r.drugName || '-'}</td>
+                    <td class="py-3 px-3 font-bold text-slate-900 dark:text-white font-sans">${r.drugName || '-'}</td>
                     <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono">${r.avgMonthlyConsumption ?? '-'}</td>
                     <td class="py-3 px-3 font-extrabold text-emerald-700 dark:text-emerald-400 text-sm font-mono">${r.recommendedQty ?? '-'}</td>
                 </tr>
@@ -1216,9 +1259,18 @@ async def google_auth(data: AuthGoogleInput):
 
 @app.post("/api/forecast", response_model=ForecastOutput)
 async def create_forecast(data: ForecastInput):
+    drug = (data.drug_name or data.drugName or "").strip()
+    
+    # Enforce English-only for Drug Name
+    if re.search(r'[\u0600-\u06FF]', drug):
+        raise HTTPException(
+            status_code=400,
+            detail="Drug name must be entered in English only / يجب كتابة اسم الصنف باللغة الإنجليزية فقط"
+        )
+
     facility = data.facility_name or data.facilityName or "General / عام"
     user = data.user_name or data.userName or "User / مستخدم"
-    drug = data.drug_name or data.drugName or "Unspecified Drug / صنف غير محدد"
+    drug = drug or "Unspecified Drug"
     avg_monthly = data.avg_monthly_consumption if data.avg_monthly_consumption is not None else (data.avgMonthlyConsumption or 0.0)
     current_stock = data.current_stock if data.current_stock is not None else (data.currentStock or 0.0)
     
