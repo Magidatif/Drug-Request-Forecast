@@ -12,7 +12,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="MediDemand",
     description="Hospital & Primary Care Healthcare Drug Forecasting Platform - MAG Healthcare Solutions",
-    version="5.0.0"
+    version="5.1.0"
 )
 
 app.add_middleware(
@@ -33,31 +33,34 @@ class ForecastInput(BaseModel):
     userName: Optional[str] = None
     drug_name: Optional[str] = None
     drugName: Optional[str] = None
+    m1_consumption: Optional[float] = 0.0
+    m2_consumption: Optional[float] = 0.0
+    m3_consumption: Optional[float] = 0.0
     avg_monthly_consumption: Optional[float] = None
-    avgMonthlyConsumption: Optional[float] = None
     current_stock: Optional[float] = 0.0
     currentStock: Optional[float] = 0.0
-    lead_days: Optional[float] = None
-    leadDays: Optional[float] = None
-    lead_time_months: Optional[float] = None
-    leadMonths: Optional[float] = None
-    safety_buffer_percent: Optional[float] = 10.0
-    safetyBuffer: Optional[float] = 10.0
+    lead_days: Optional[float] = 30.0
+    leadDays: Optional[float] = 30.0
+    safety_days: Optional[float] = 15.0
+    safetyDays: Optional[float] = 15.0
 
 class ForecastOutput(BaseModel):
     status: str
     recommended_qty: int
+    avg_monthly: float
+    daily_demand: float
+    total_days: float
     timestamp: str
     facility: Optional[str] = None
     drug: Optional[str] = None
 
-def calculate_forecast_logic(avg_monthly: float, current_stock: float = 0.0, lead_days: float = 45.0, safety_buffer_pct: float = 10.0) -> int:
+def calculate_forecast_logic(m1: float, m2: float, m3: float, lead_days: float, safety_days: float, current_stock: float) -> tuple[int, float, float, float]:
+    avg_monthly = (m1 + m2 + m3) / 3.0
     daily_demand = avg_monthly / 30.0
-    raw_demand = daily_demand * lead_days
-    safety_stock = raw_demand * (safety_buffer_pct / 100.0)
-    total_needed = raw_demand + safety_stock
+    total_days = lead_days + safety_days
+    total_needed = daily_demand * total_days
     net_order = total_needed - current_stock
-    return max(0, round(net_order))
+    return max(0, round(net_order)), round(avg_monthly, 2), round(daily_demand, 2), total_days
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="ar" dir="rtl" class="light">
@@ -187,80 +190,113 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Forecast Input Form -->
-            <div class="lg:col-span-5">
+            <!-- Forecast Input Form (Exact match to medical requirements) -->
+            <div class="lg:col-span-6">
                 <div class="bg-white dark:bg-darkcard rounded-3xl p-6 shadow-sm dark:shadow-2xl border border-slate-200/80 dark:border-slate-700/80 transition-colors">
-                    <div class="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
-                        <i class="fa-solid fa-calculator text-emerald-600 dark:text-emerald-400 text-lg"></i>
-                        <h2 id="i18n-formTitle" class="font-bold text-slate-800 dark:text-white text-lg">بيانات الصنف واحتساب الطلبية</h2>
+                    <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-calculator text-emerald-600 dark:text-emerald-400 text-lg"></i>
+                            <h2 id="i18n-formTitle" class="font-bold text-slate-800 dark:text-white text-lg">بيانات واحتساب طلبية الصنف</h2>
+                        </div>
+                        <span class="text-[11px] bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-xl font-bold">
+                            نظام متوسط 3 أشهر
+                        </span>
                     </div>
 
                     <form id="forecastForm" onsubmit="handleCalculate(event)" class="space-y-4">
-                        <div>
-                            <label id="i18n-labelFacility" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">اسم المنشأة / المستشفى</label>
-                            <input type="text" id="facilityName" required placeholder="مثال: مستشفى الكرنك الدولي / مركز الدير"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
-                        </div>
-
-                        <div>
-                            <label id="i18n-labelUser" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">اسم المستخدم / الصيدلي المسؤول</label>
-                            <input type="text" id="userName" required placeholder="مثال: د. فاطمة"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
-                        </div>
-
-                        <div>
-                            <div class="flex justify-between items-center mb-1.5">
-                                <label id="i18n-labelDrug" class="block text-xs font-bold text-slate-700 dark:text-slate-300">اسم الصنف الدوائي (بالإنجليزية فقط - English Only)</label>
-                                <span class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">English Only</span>
-                            </div>
-                            <input type="text" id="drugName" required placeholder="e.g. Ceftriaxone 1g Vial / Paracetamol 500mg" dir="ltr"
-                                oninput="onDrugNameInput(this)"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-sans">
-                            <p id="drugNameError" class="hidden text-[11px] text-rose-500 dark:text-rose-400 font-bold mt-1.5 flex items-center gap-1.5 animate-pulse">
-                                <i class="fa-solid fa-triangle-exclamation"></i>
-                                <span id="i18n-drugNameError">يجب كتابة اسم الصنف الدوائي بالحروف الإنجليزية فقط (English Letters Only)</span>
-                            </p>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
+                        
+                        <!-- Row 1: Drug Name & Month 1 -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label id="i18n-labelAvgMonthly" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">متوسط الاستهلاك الشهري</label>
-                                <input type="number" step="any" min="0" id="avgMonthly" required placeholder="0" oninput="liveUpdateCalculation()"
-                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
+                                <div class="flex justify-between items-center mb-1.5">
+                                    <label id="i18n-labelDrug" class="block text-xs font-bold text-slate-700 dark:text-slate-300">اسم الصنف (English Only)</label>
+                                    <span class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">English</span>
+                                </div>
+                                <input type="text" id="drugName" required placeholder="e.g. Paracetamol 500mg / Ceftriaxone 1g" dir="ltr"
+                                    oninput="onDrugNameInput(this)"
+                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-sans">
+                                <p id="drugNameError" class="hidden text-[11px] text-rose-500 dark:text-rose-400 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span id="i18n-drugNameError">يجب كتابة اسم الصنف بالحروف الإنجليزية فقط</span>
+                                </p>
                             </div>
+
                             <div>
-                                <label id="i18n-labelStock" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">الرصيد الحالي بالمخزن</label>
-                                <input type="number" step="any" min="0" id="currentStock" placeholder="0" oninput="liveUpdateCalculation()"
+                                <label id="i18n-labelM1" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">استهلاك الشهر الأول</label>
+                                <input type="number" step="any" min="0" id="m1Consumption" required placeholder="0" oninput="liveUpdateCalculation()"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
+                        <!-- Row 2: Month 2 & Month 3 -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مدة كفاية الطلبية (عدد الأيام)</label>
-                                <input type="number" step="1" min="1" value="45" id="leadDays" oninput="liveUpdateCalculation()" placeholder="45"
+                                <label id="i18n-labelM2" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">استهلاك الشهر الثاني</label>
+                                <input type="number" step="any" min="0" id="m2Consumption" required placeholder="0" oninput="liveUpdateCalculation()"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
-                                <p id="i18n-leadHint" class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">30 يوم = شهر | 45 يوم = شهر ونصف | 90 يوم = 3 أشهر</p>
                             </div>
+
                             <div>
-                                <label id="i18n-labelBuffer" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مخزون الأمان (Buffer %)</label>
-                                <input type="number" step="1" min="0" max="100" value="10" id="safetyBuffer" oninput="liveUpdateCalculation()"
-                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
-                                <p id="i18n-bufferHint" class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">نسبة احتياطية للطوارئ والتأخير</p>
+                                <label id="i18n-labelM3" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">استهلاك الشهر الثالث</label>
+                                <input type="number" step="any" min="0" id="m3Consumption" required placeholder="0" oninput="liveUpdateCalculation()"
+                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
                             </div>
                         </div>
 
-                        <!-- Result Card -->
+                        <!-- Row 3: Lead Time (Days) & Safety Stock (Days) -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">فترة التوريد (بالأيام)</label>
+                                <input type="number" step="1" min="0" value="30" id="leadDays" oninput="liveUpdateCalculation()" placeholder="30"
+                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
+                                <p id="i18n-leadHint" class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">مدة وصول الشحنة من المورد للمخزن</p>
+                            </div>
+
+                            <div>
+                                <label id="i18n-labelSafety" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">كفاية رصيد الأمان (بالأيام)</label>
+                                <input type="number" step="1" min="0" value="15" id="safetyDays" oninput="liveUpdateCalculation()" placeholder="15"
+                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
+                                <p id="i18n-safetyHint" class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">عدد أيام المخزون الاحتياطي للطوارئ</p>
+                            </div>
+                        </div>
+
+                        <!-- Row 4: Current Stock -->
+                        <div>
+                            <label id="i18n-labelStock" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">المخزون الحالي بالمستودع</label>
+                            <input type="number" step="any" min="0" id="currentStock" placeholder="0" oninput="liveUpdateCalculation()"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
+                        </div>
+
+                        <!-- Optional Facility / User Collapsible Header Details -->
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <div>
+                                <label id="i18n-labelFacility" class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">اسم المنشأة / المستشفى</label>
+                                <input type="text" id="facilityName" placeholder="مستشفى الكرنك الدولي"
+                                    class="w-full px-3 py-1.5 bg-slate-50/80 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-white outline-none">
+                            </div>
+                            <div>
+                                <label id="i18n-labelUser" class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">الصيدلي المسؤول</label>
+                                <input type="text" id="userName" placeholder="د. الصيدلي"
+                                    class="w-full px-3 py-1.5 bg-slate-50/80 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-white outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Result Card with Live Breakdown -->
                         <div class="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl mt-4 transition-colors">
                             <div class="text-xs text-emerald-800 dark:text-emerald-300 font-bold mb-1 flex items-center justify-between">
                                 <span id="i18n-resultTitle">الكمية المقترح طلبها (Recommended Order):</span>
-                                <span id="i18n-badgeFormula" class="text-[10px] bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">معادلة بالأيام</span>
+                                <span id="liveTotalDaysBadge" class="text-[10px] bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">تغطية 45 يوم</span>
                             </div>
-                            <div class="flex items-baseline justify-between">
-                                <span id="liveResult" class="text-4xl font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">0</span>
+                            <div class="flex items-baseline justify-between my-1">
+                                <span id="liveResult" class="text-4xl font-black text-emerald-700 dark:text-emerald-400 font-mono">0</span>
                                 <span id="i18n-resultUnit" class="text-xs text-emerald-600 dark:text-emerald-300 font-bold">عبوة / وحدة</span>
                             </div>
-                            <p id="i18n-resultDesc" class="text-[11px] text-emerald-600 dark:text-emerald-400/80 mt-1.5">تراعي الاستهلاك اليومي (الشهري ÷ 30)، فترة التغطية بالأيام، مخزون الأمان، وخصم الرصيد المتوفر.</p>
+                            
+                            <!-- Calculation summary breakdown -->
+                            <div class="mt-2.5 pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 grid grid-cols-2 gap-2 text-[11px] text-emerald-800 dark:text-emerald-300">
+                                <div><span class="text-emerald-600 dark:text-emerald-400">متوسط الاستهلاك:</span> <span id="calcAvg" class="font-mono font-bold">0</span> / شهر</div>
+                                <div><span class="text-emerald-600 dark:text-emerald-400">الاستهلاك اليومي:</span> <span id="calcDaily" class="font-mono font-bold">0</span> / يوم</div>
+                            </div>
                         </div>
 
                         <button type="submit" id="submitBtn"
@@ -273,7 +309,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             </div>
 
             <!-- Stats & Historical Submissions -->
-            <div class="lg:col-span-7 space-y-6">
+            <div class="lg:col-span-6 space-y-6">
                 <!-- KPI Mini Cards -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white dark:bg-darkcard p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm stat-card">
@@ -291,10 +327,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <div class="flex flex-wrap justify-between items-center gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700/60">
                         <div class="flex items-center gap-2">
                             <i class="fa-solid fa-clock-rotate-left text-slate-500 dark:text-slate-400"></i>
-                            <h3 id="i18n-historyTitle" class="font-bold text-slate-800 dark:text-white text-base">سجل الطلبيات والتوقعات المحفوظة</h3>
+                            <h3 id="i18n-historyTitle" class="font-bold text-slate-800 dark:text-white text-base">سجل الطلبيات المحفوظة</h3>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
-                            <input type="text" id="tableSearch" oninput="filterTable()" placeholder="بحث عن صنف أو منشأة..."
+                            <input type="text" id="tableSearch" oninput="filterTable()" placeholder="بحث عن صنف..."
                                 class="px-3 py-1.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-emerald-500 text-slate-900 dark:text-white">
                             
                             <button type="button" onclick="exportToCSV()" class="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer">
@@ -302,11 +338,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                             </button>
 
                             <button type="button" onclick="clearAllData()" title="مسح كافة البيانات / Clear All Records" class="text-xs bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer">
-                                <i class="fa-solid fa-trash-can text-rose-600 dark:text-rose-400"></i> <span id="i18n-clearBtn">مسح السجلات</span>
-                            </button>
-
-                            <button type="button" onclick="refreshData()" title="تحديث البيانات / Refresh" class="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer">
-                                <i class="fa-solid fa-rotate"></i>
+                                <i class="fa-solid fa-trash-can text-rose-600 dark:text-rose-400"></i> <span id="i18n-clearBtn">مسح</span>
                             </button>
                         </div>
                     </div>
@@ -316,16 +348,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                             <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                                 <tr>
                                     <th id="i18n-thTime" class="py-3 px-3">Date & Time</th>
-                                    <th id="i18n-thFacility" class="py-3 px-3">المنشأة</th>
-                                    <th id="i18n-thUser" class="py-3 px-3">المستخدم</th>
                                     <th id="i18n-thDrug" class="py-3 px-3">الصنف</th>
-                                    <th id="i18n-thAvg" class="py-3 px-3">م. الاستهلاك</th>
+                                    <th id="i18n-thAvg" class="py-3 px-3">م. 3 أشهر</th>
+                                    <th id="i18n-thStock" class="py-3 px-3">المخزون</th>
+                                    <th id="i18n-thDays" class="py-3 px-3">الأيام</th>
                                     <th id="i18n-thRec" class="py-3 px-3 text-emerald-700 dark:text-emerald-400">الكمية المقترحة</th>
                                 </tr>
                             </thead>
                             <tbody id="historyTableBody" class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
                                 <tr>
-                                    <td colspan="6" id="i18n-loadingRows" class="py-8 text-center text-slate-400 dark:text-slate-500">جاري تحميل السجلات...</td>
+                                    <td colspan="6" id="i18n-loadingRows" class="py-8 text-center text-slate-400 dark:text-slate-500">لا توجد طلبات مسجلة حتى الآن</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -341,7 +373,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="flex items-center gap-2">
                 <img src="/logo.png" alt="MAG" class="h-5 w-5 object-contain">
                 <span class="font-bold text-slate-700 dark:text-slate-300">MAG Healthcare Solutions</span>
-                <span>• MediDemand v5.0</span>
+                <span>• MediDemand v5.1</span>
             </div>
             <div>
                 <span>جميع الحقوق محفوظة © 2026</span>
@@ -397,7 +429,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             <!-- Form -->
             <form id="authEmailForm" onsubmit="handleEmailAuth(event)" class="space-y-3.5">
-                <!-- Name field (shown on register) -->
                 <div id="authNameField" class="hidden">
                     <label id="i18n-authLabelName" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الاسم الكامل / الصفة</label>
                     <input type="text" id="authNameInput" placeholder="مثال: د. ماجد عاطف"
@@ -436,7 +467,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         let currentAuthTab = 'login';
         let records = JSON.parse(localStorage.getItem('forecast_records') || '[]');
 
-        // Full Arabic / English Dictionary with MediDemand Branding
         const translations = {
             ar: {
                 appTitle: "MediDemand",
@@ -448,44 +478,43 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 authBannerTitle: "تسجيل الدخول متاح",
                 authBannerDesc: "يمكنك تسجيل الدخول عبر حساب Google أو بريدك الإلكتروني لتوثيق السجلات باسمك.",
                 authBannerBtn: "تسجيل الدخول",
-                formTitle: "بيانات الصنف واحتساب الطلبية",
+                formTitle: "بيانات واحتساب طلبية الصنف",
+                labelDrug: "اسم الصنف (English Only)",
+                placeholderDrug: "e.g. Paracetamol 500mg / Ceftriaxone 1g",
+                drugNameError: "يجب كتابة اسم الصنف بالحروف الإنجليزية فقط",
+                labelM1: "استهلاك الشهر الأول",
+                labelM2: "استهلاك الشهر الثاني",
+                labelM3: "استهلاك الشهر الثالث",
+                labelLead: "فترة التوريد (بالأيام)",
+                leadHint: "مدة وصول الشحنة من المورد للمخزن",
+                labelSafety: "كفاية رصيد الأمان (بالأيام)",
+                safetyHint: "عدد أيام المخزون الاحتياطي للطوارئ",
+                labelStock: "المخزون الحالي بالمستودع",
                 labelFacility: "اسم المنشأة / المستشفى",
-                placeholderFacility: "مثال: مستشفى الكرنك الدولي / مركز الدير",
-                labelUser: "اسم المستخدم / الصيدلي المسؤول",
-                placeholderUser: "مثال: د. فاطمة",
-                labelDrug: "اسم الصنف الدوائي (بالإنجليزية فقط - English Only)",
-                placeholderDrug: "e.g. Ceftriaxone 1g Vial / Paracetamol 500mg",
-                drugNameError: "يجب كتابة اسم الصنف الدوائي بالحروف الإنجليزية فقط (English Letters Only)",
-                labelAvgMonthly: "متوسط الاستهلاك الشهري",
-                labelStock: "الرصيد الحالي بالمخزن",
-                labelLead: "مدة كفاية الطلبية (عدد الأيام)",
-                leadHint: "30 يوم = شهر | 45 يوم = شهر ونصف | 90 يوم = 3 أشهر",
-                labelBuffer: "مخزون الأمان (Buffer %)",
-                bufferHint: "نسبة احتياطية للطوارئ والتأخير",
+                placeholderFacility: "مستشفى الكرنك الدولي",
+                labelUser: "الصيدلي المسؤول",
+                placeholderUser: "د. الصيدلي",
                 resultTitle: "الكمية المقترح طلبها (Recommended Order):",
-                badgeFormula: "معادلة بالأيام",
                 resultUnit: "عبوة / وحدة",
-                resultDesc: "تراعي الاستهلاك اليومي (الشهري ÷ 30)، فترة التغطية بالأيام، مخزون الأمان، وخصم الرصيد المتوفر.",
                 submitBtn: "حفظ وتأكيد الطلبية",
                 kpiTotalItems: "إجمالي الأصناف المسجلة",
                 kpiTotalQty: "إجمالي الكميات المطلوبة",
-                historyTitle: "سجل الطلبيات والتوقعات المحفوظة",
-                searchPlaceholder: "بحث عن صنف أو منشأة...",
+                historyTitle: "سجل الطلبيات المحفوظة",
+                searchPlaceholder: "بحث عن صنف...",
                 exportBtn: "تصدير CSV",
-                clearBtn: "مسح السجلات",
+                clearBtn: "مسح",
                 confirmClear: "هل أنت متأكد من رغبتك في مسح كافة السجلات المحفوظة؟",
                 clearOkToast: "تم مسح كافة البيانات بنجاح",
                 thTime: "Date & Time",
-                thFacility: "المنشأة",
-                thUser: "المستخدم",
                 thDrug: "الصنف",
-                thAvg: "م. الاستهلاك",
+                thAvg: "م. 3 أشهر",
+                thStock: "المخزون",
+                thDays: "الأيام",
                 thRec: "الكمية المقترحة",
-                loadingRows: "جاري تحميل السجلات...",
+                loadingRows: "لا توجد طلبات مسجلة حتى الآن",
                 emptyRows: "لا توجد طلبات مسجلة حتى الآن",
                 noMatchRows: "لا توجد نتائج مطابقة للبحث",
                 
-                // Auth Modal Texts
                 authModalTitle: "تسجيل الدخول لمنظومة MediDemand",
                 authModalDesc: "اختر طريقة تسجيل الدخول المناسبة لك للمتابعة",
                 btnGoogleLogin: "المتابعة باستخدام حساب Google",
@@ -502,10 +531,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 toastRegisterOk: "تم إنشاء الحساب بنجاح وتسجيل الدخول",
                 toastLogoutOk: "تم تسجيل الخروج",
                 toastDrugMustBeEnglish: "يرجى كتابة اسم الصنف باللغة الإنجليزية فقط (English Letters Only)",
-                
-                toastSavedOk: "تم حفظ طلبية الصنف ({drug}) بكمية مقترحة: {qty}",
+                toastSavedOk: "تم حفظ طلبية الصنف ({drug}) بكمية: {qty}",
                 exportNoData: "لا توجد بيانات لتصديرها",
-                csvHeader: "\uFEFFDate & Time,Facility Name,User Name,Drug Name,Avg Monthly Consumption,Recommended Quantity\n"
+                csvHeader: "\uFEFFDate & Time,Drug Name,Month 1,Month 2,Month 3,Avg Monthly,Lead Days,Safety Days,Current Stock,Recommended Order\n"
             },
             en: {
                 appTitle: "MediDemand",
@@ -517,44 +545,43 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 authBannerTitle: "Sign In Available",
                 authBannerDesc: "Sign in with Google or your work email to authenticate orders under your name.",
                 authBannerBtn: "Sign In",
-                formTitle: "Drug Item Data & Order Calculator",
-                labelFacility: "Facility / Hospital Name",
-                placeholderFacility: "e.g. Karnak International Hospital",
-                labelUser: "User / Responsible Pharmacist",
-                placeholderUser: "e.g. Dr. Fatima",
-                labelDrug: "Drug Name / Formulation (English Only)",
-                placeholderDrug: "e.g. Ceftriaxone 1g Vial / Paracetamol 500mg",
+                formTitle: "Drug Item Forecast & Order Calculator",
+                labelDrug: "Drug Name (English Only)",
+                placeholderDrug: "e.g. Paracetamol 500mg / Ceftriaxone 1g",
                 drugNameError: "Drug name must be entered in English letters only",
-                labelAvgMonthly: "Avg Monthly Consumption",
+                labelM1: "Month 1 Consumption",
+                labelM2: "Month 2 Consumption",
+                labelM3: "Month 3 Consumption",
+                labelLead: "Lead Time (Days)",
+                leadHint: "Delivery duration from supplier to warehouse",
+                labelSafety: "Safety Stock Coverage (Days)",
+                safetyHint: "Buffer stock coverage days for emergencies",
                 labelStock: "Current Stock on Hand",
-                labelLead: "Order Coverage Duration (Days)",
-                leadHint: "30 days = 1 month | 45 days = 1.5 months | 90 days = 3 months",
-                labelBuffer: "Safety Buffer (%)",
-                bufferHint: "Emergency buffer percentage",
+                labelFacility: "Facility / Hospital",
+                placeholderFacility: "Karnak International Hospital",
+                labelUser: "Pharmacist in Charge",
+                placeholderUser: "Dr. Pharmacist",
                 resultTitle: "Recommended Order Quantity:",
-                badgeFormula: "Days Formula",
                 resultUnit: "Packs / Units",
-                resultDesc: "Accounts for daily demand (monthly ÷ 30), coverage days, safety stock minus current inventory.",
                 submitBtn: "Save & Confirm Order",
                 kpiTotalItems: "Total Recorded Drugs",
                 kpiTotalQty: "Total Ordered Quantity",
-                historyTitle: "Saved Drug Forecasts & Orders History",
-                searchPlaceholder: "Search drug or facility...",
+                historyTitle: "Saved Drug Orders History",
+                searchPlaceholder: "Search drug...",
                 exportBtn: "Export CSV",
-                clearBtn: "Clear Records",
+                clearBtn: "Clear",
                 confirmClear: "Are you sure you want to clear all recorded orders?",
                 clearOkToast: "All records cleared successfully",
                 thTime: "Date & Time",
-                thFacility: "Facility",
-                thUser: "User",
                 thDrug: "Drug Item",
-                thAvg: "Avg Monthly",
+                thAvg: "3-Mo Avg",
+                thStock: "Stock",
+                thDays: "Days",
                 thRec: "Recommended Qty",
-                loadingRows: "Loading records...",
+                loadingRows: "No orders recorded yet",
                 emptyRows: "No orders recorded yet",
                 noMatchRows: "No matching records found",
                 
-                // Auth Modal Texts
                 authModalTitle: "Sign in to MediDemand",
                 authModalDesc: "Choose your preferred sign-in method to continue",
                 btnGoogleLogin: "Continue with Google",
@@ -571,10 +598,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 toastRegisterOk: "Account created and signed in successfully",
                 toastLogoutOk: "Signed out successfully",
                 toastDrugMustBeEnglish: "Drug name must be in English letters only",
-
-                toastSavedOk: "Order saved for ({drug}) with recommended qty: {qty}",
+                toastSavedOk: "Order saved for ({drug}) with qty: {qty}",
                 exportNoData: "No data available to export",
-                csvHeader: "\uFEFFDate & Time,Facility Name,User Name,Drug Name,Avg Monthly Consumption,Recommended Quantity\n"
+                csvHeader: "\uFEFFDate & Time,Drug Name,Month 1,Month 2,Month 3,Avg Monthly,Lead Days,Safety Days,Current Stock,Recommended Order\n"
             }
         };
 
@@ -606,7 +632,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 document.body.style.textAlign = 'right';
             }
 
-            // Update text elements
             document.getElementById('langLabel').textContent = t.langToggle;
             document.getElementById('i18n-appTitle').textContent = t.appTitle;
             document.getElementById('i18n-loginBtn').textContent = t.loginBtn;
@@ -616,26 +641,27 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('i18n-authBannerBtn').textContent = t.authBannerBtn;
 
             document.getElementById('i18n-formTitle').textContent = t.formTitle;
+            document.getElementById('i18n-labelDrug').textContent = t.labelDrug;
+            document.getElementById('drugName').placeholder = t.placeholderDrug;
+            document.getElementById('i18n-drugNameError').textContent = t.drugNameError;
+
+            document.getElementById('i18n-labelM1').textContent = t.labelM1;
+            document.getElementById('i18n-labelM2').textContent = t.labelM2;
+            document.getElementById('i18n-labelM3').textContent = t.labelM3;
+
+            document.getElementById('i18n-labelLead').textContent = t.labelLead;
+            document.getElementById('i18n-leadHint').textContent = t.leadHint;
+            document.getElementById('i18n-labelSafety').textContent = t.labelSafety;
+            document.getElementById('i18n-safetyHint').textContent = t.safetyHint;
+
+            document.getElementById('i18n-labelStock').textContent = t.labelStock;
             document.getElementById('i18n-labelFacility').textContent = t.labelFacility;
             document.getElementById('facilityName').placeholder = t.placeholderFacility;
             document.getElementById('i18n-labelUser').textContent = t.labelUser;
             document.getElementById('userName').placeholder = t.placeholderUser;
-            document.getElementById('i18n-labelDrug').textContent = t.labelDrug;
-            document.getElementById('drugName').placeholder = t.placeholderDrug;
-            document.getElementById('i18n-drugNameError').textContent = t.drugNameError;
-            document.getElementById('i18n-labelAvgMonthly').textContent = t.labelAvgMonthly;
-            document.getElementById('i18n-labelStock').textContent = t.labelStock;
-            document.getElementById('i18n-labelLead').textContent = t.labelLead;
-            const leadHintEl = document.getElementById('i18n-leadHint');
-            if (leadHintEl) leadHintEl.textContent = t.leadHint;
-            document.getElementById('i18n-labelBuffer').textContent = t.labelBuffer;
-            const bufferHintEl = document.getElementById('i18n-bufferHint');
-            if (bufferHintEl) bufferHintEl.textContent = t.bufferHint;
 
             document.getElementById('i18n-resultTitle').textContent = t.resultTitle;
-            document.getElementById('i18n-badgeFormula').textContent = t.badgeFormula;
             document.getElementById('i18n-resultUnit').textContent = t.resultUnit;
-            document.getElementById('i18n-resultDesc').textContent = t.resultDesc;
             document.getElementById('i18n-submitBtn').textContent = t.submitBtn;
 
             document.getElementById('i18n-kpiTotalItems').textContent = t.kpiTotalItems;
@@ -648,10 +674,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (clearBtn) clearBtn.textContent = t.clearBtn;
 
             document.getElementById('i18n-thTime').textContent = t.thTime;
-            document.getElementById('i18n-thFacility').textContent = t.thFacility;
-            document.getElementById('i18n-thUser').textContent = t.thUser;
             document.getElementById('i18n-thDrug').textContent = t.thDrug;
             document.getElementById('i18n-thAvg').textContent = t.thAvg;
+            document.getElementById('i18n-thStock').textContent = t.thStock;
+            document.getElementById('i18n-thDays').textContent = t.thDays;
             document.getElementById('i18n-thRec').textContent = t.thRec;
 
             // Auth Modal translations
@@ -667,7 +693,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('i18n-authLabelPass').textContent = t.authLabelPass;
             document.getElementById('i18n-authSubmitText').textContent = currentAuthTab === 'login' ? t.authSubmitLogin : t.authSubmitRegister;
 
-            // Re-apply theme label for current language
             const isDark = document.documentElement.classList.contains('dark');
             const themeLabel = document.getElementById('themeLabel');
             if (themeLabel) {
@@ -681,7 +706,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             setLanguage(currentLang === 'ar' ? 'en' : 'ar');
         }
 
-        // Dark / Light Theme Manager
         function initTheme() {
             const savedTheme = localStorage.getItem('drug_forecast_theme');
             const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -761,12 +785,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             updateAuthStateUI();
             renderTable();
             updateKPIs();
-        }
-
-        function refreshData() {
-            records = JSON.parse(localStorage.getItem('forecast_records') || '[]');
-            renderTable();
-            updateKPIs();
+            liveUpdateCalculation();
         }
 
         function clearAllData() {
@@ -852,35 +871,48 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             showToast(t.toastLogoutOk);
         }
 
-        // Days-Based Formula
-        function computeForecast(avgMonthly, currentStock, leadDays, safetyBufferPercent) {
+        // Exact Formula based on 3 Months Consumption + Lead Days + Safety Days - Current Stock
+        function computeForecast(m1, m2, m3, leadDays, safetyDays, currentStock) {
+            const avgMonthly = (m1 + m2 + m3) / 3.0;
             const dailyDemand = avgMonthly / 30.0;
-            const rawDemand = dailyDemand * leadDays;
-            const safetyStock = rawDemand * (safetyBufferPercent / 100.0);
-            const totalRequired = rawDemand + safetyStock;
+            const totalDays = leadDays + safetyDays;
+            const totalRequired = dailyDemand * totalDays;
             const netOrder = totalRequired - currentStock;
-            return Math.max(0, Math.round(netOrder));
+            return {
+                recommendedQty: Math.max(0, Math.round(netOrder)),
+                avgMonthly: Math.round(avgMonthly * 10) / 10,
+                dailyDemand: Math.round(dailyDemand * 100) / 100,
+                totalDays: totalDays
+            };
         }
 
         function liveUpdateCalculation() {
-            const avg = parseFloat(document.getElementById('avgMonthly').value) || 0;
+            const m1 = parseFloat(document.getElementById('m1Consumption').value) || 0;
+            const m2 = parseFloat(document.getElementById('m2Consumption').value) || 0;
+            const m3 = parseFloat(document.getElementById('m3Consumption').value) || 0;
+            const leadDays = parseFloat(document.getElementById('leadDays').value) || 0;
+            const safetyDays = parseFloat(document.getElementById('safetyDays').value) || 0;
             const stock = parseFloat(document.getElementById('currentStock').value) || 0;
-            const days = parseFloat(document.getElementById('leadDays').value) || 45;
-            const buffer = parseFloat(document.getElementById('safetyBuffer').value) || 10;
-            const result = computeForecast(avg, stock, days, buffer);
-            const resEl = document.getElementById('liveResult');
-            if (resEl) resEl.textContent = result.toLocaleString('en-US');
+
+            const res = computeForecast(m1, m2, m3, leadDays, safetyDays, stock);
+
+            document.getElementById('liveResult').textContent = res.recommendedQty.toLocaleString('en-US');
+            document.getElementById('calcAvg').textContent = res.avgMonthly.toLocaleString('en-US');
+            document.getElementById('calcDaily').textContent = res.dailyDemand.toLocaleString('en-US');
+            document.getElementById('liveTotalDaysBadge').textContent = `تغطية ${res.totalDays} يوم (${leadDays} توريد + ${safetyDays} أمان)`;
         }
 
         function handleCalculate(e) {
             e.preventDefault();
-            const facility = document.getElementById('facilityName').value.trim();
-            const user = document.getElementById('userName').value.trim();
             const drug = document.getElementById('drugName').value.trim();
-            const avg = parseFloat(document.getElementById('avgMonthly').value) || 0;
+            const m1 = parseFloat(document.getElementById('m1Consumption').value) || 0;
+            const m2 = parseFloat(document.getElementById('m2Consumption').value) || 0;
+            const m3 = parseFloat(document.getElementById('m3Consumption').value) || 0;
+            const leadDays = parseFloat(document.getElementById('leadDays').value) || 0;
+            const safetyDays = parseFloat(document.getElementById('safetyDays').value) || 0;
             const stock = parseFloat(document.getElementById('currentStock').value) || 0;
-            const days = parseFloat(document.getElementById('leadDays').value) || 45;
-            const buffer = parseFloat(document.getElementById('safetyBuffer').value) || 10;
+            const facility = document.getElementById('facilityName').value.trim() || 'العام';
+            const user = document.getElementById('userName').value.trim() || 'المسؤول';
             const t = translations[currentLang];
 
             // Validation: Drug name MUST be in English only
@@ -894,33 +926,41 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 return;
             }
 
-            const recQty = computeForecast(avg, stock, days, buffer);
+            const calc = computeForecast(m1, m2, m3, leadDays, safetyDays, stock);
             const now = new Date();
             const pad = n => (n < 10 ? '0' + n : n);
             const timestampStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-            const localItem = {
+            const record = {
                 timestamp: timestampStr,
                 facilityName: facility,
                 userName: user,
                 drugName: drug,
-                avgMonthlyConsumption: avg,
+                m1: m1,
+                m2: m2,
+                m3: m3,
+                avgMonthly: calc.avgMonthly,
+                leadDays: leadDays,
+                safetyDays: safetyDays,
+                totalDays: calc.totalDays,
                 currentStock: stock,
-                recommendedQty: recQty
+                recommendedQty: calc.recommendedQty
             };
 
-            records.unshift(localItem);
+            records.unshift(record);
             localStorage.setItem('forecast_records', JSON.stringify(records));
             renderTable();
             updateKPIs();
 
-            const msg = t.toastSavedOk.replace('{drug}', drug).replace('{qty}', recQty);
+            const msg = t.toastSavedOk.replace('{drug}', drug).replace('{qty}', calc.recommendedQty);
             showToast(msg);
 
             document.getElementById('drugName').value = '';
             const errEl = document.getElementById('drugNameError');
             if (errEl) errEl.classList.add('hidden');
-            document.getElementById('avgMonthly').value = '';
+            document.getElementById('m1Consumption').value = '';
+            document.getElementById('m2Consumption').value = '';
+            document.getElementById('m3Consumption').value = '';
             document.getElementById('currentStock').value = '';
             liveUpdateCalculation();
         }
@@ -932,8 +972,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const filtered = records.filter(r => 
                 !filterText || 
                 (r.drugName && r.drugName.toLowerCase().includes(filterText.toLowerCase())) || 
-                (r.facilityName && r.facilityName.toLowerCase().includes(filterText.toLowerCase())) ||
-                (r.userName && r.userName.toLowerCase().includes(filterText.toLowerCase()))
+                (r.facilityName && r.facilityName.toLowerCase().includes(filterText.toLowerCase()))
             );
 
             if (filtered.length === 0) {
@@ -945,10 +984,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             tbody.innerHTML = filtered.map(r => `
                 <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/50 transition">
                     <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]" dir="ltr">${r.timestamp || '-'}</td>
-                    <td class="py-3 px-3 font-semibold text-slate-800 dark:text-slate-100">${r.facilityName || '-'}</td>
-                    <td class="py-3 px-3 text-slate-600 dark:text-slate-300">${r.userName || '-'}</td>
                     <td class="py-3 px-3 font-bold text-slate-900 dark:text-white font-sans">${r.drugName || '-'}</td>
-                    <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono">${r.avgMonthlyConsumption ?? '-'}</td>
+                    <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono">${r.avgMonthly ?? '-'}</td>
+                    <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono">${r.currentStock ?? '0'}</td>
+                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono">${r.totalDays || (r.leadDays + r.safetyDays) || '-'} يوم</td>
                     <td class="py-3 px-3 font-extrabold text-emerald-700 dark:text-emerald-400 text-sm font-mono">${r.recommendedQty ?? '-'}</td>
                 </tr>
             `).join('');
@@ -975,7 +1014,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
             let csv = t.csvHeader;
             records.forEach(r => {
-                csv += `"${r.timestamp || ''}","${r.facilityName || ''}","${r.userName || ''}","${r.drugName || ''}","${r.avgMonthlyConsumption || 0}","${r.recommendedQty || 0}"\n`;
+                csv += `"${r.timestamp || ''}","${r.drugName || ''}","${r.m1 || 0}","${r.m2 || 0}","${r.m3 || 0}","${r.avgMonthly || 0}","${r.leadDays || 0}","${r.safetyDays || 0}","${r.currentStock || 0}","${r.recommendedQty || 0}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1007,7 +1046,6 @@ async def serve_dashboard():
 async def calculate_forecast_api(data: ForecastInput):
     drug = (data.drug_name or data.drugName or "").strip()
     
-    # Enforce English-only for Drug Name
     if re.search(r'[\u0600-\u06FF]', drug):
         raise HTTPException(
             status_code=400,
@@ -1015,30 +1053,22 @@ async def calculate_forecast_api(data: ForecastInput):
         )
 
     facility = data.facility_name or data.facilityName or "General / عام"
-    user = data.user_name or data.userName or "User / مستخدم"
     drug = drug or "Unspecified Drug"
-    avg_monthly = data.avg_monthly_consumption if data.avg_monthly_consumption is not None else (data.avgMonthlyConsumption or 0.0)
-    current_stock = data.current_stock if data.current_stock is not None else (data.currentStock or 0.0)
     
-    # Check lead days first, or convert months to days if provided
-    if data.lead_days is not None:
-        lead_days = float(data.lead_days)
-    elif data.leadDays is not None:
-        lead_days = float(data.leadDays)
-    elif data.lead_time_months is not None:
-        lead_days = float(data.lead_time_months) * 30.0
-    elif data.leadMonths is not None:
-        lead_days = float(data.leadMonths) * 30.0
-    else:
-        lead_days = 45.0
+    m1 = float(data.m1_consumption or 0.0)
+    m2 = float(data.m2_consumption or 0.0)
+    m3 = float(data.m3_consumption or 0.0)
+    
+    # If avg_monthly provided directly without m1, m2, m3
+    if data.avg_monthly_consumption and m1 == 0 and m2 == 0 and m3 == 0:
+        m1 = m2 = m3 = float(data.avg_monthly_consumption)
 
-    safety_buffer = data.safety_buffer_percent if data.safety_buffer_percent is not None else (data.safetyBuffer or 10.0)
+    lead_days = float(data.lead_days or data.leadDays or 30.0)
+    safety_days = float(data.safety_days or data.safetyDays or 15.0)
+    current_stock = float(data.current_stock or data.currentStock or 0.0)
 
-    rec_qty = calculate_forecast_logic(
-        avg_monthly,
-        current_stock,
-        lead_days,
-        safety_buffer
+    rec_qty, avg_monthly, daily_demand, total_days = calculate_forecast_logic(
+        m1, m2, m3, lead_days, safety_days, current_stock
     )
     
     timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1046,6 +1076,9 @@ async def calculate_forecast_api(data: ForecastInput):
     return ForecastOutput(
         status="success",
         recommended_qty=rec_qty,
+        avg_monthly=avg_monthly,
+        daily_demand=daily_demand,
+        total_days=total_days,
         timestamp=timestamp_str,
         facility=facility,
         drug=drug
