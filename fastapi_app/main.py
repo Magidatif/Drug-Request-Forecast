@@ -1,11 +1,11 @@
 # FastAPI Application for MediDemand
-# Designed for deployment locally, with Cloudflare Tunnel, Cloudflare Pages, or Docker
+# MAG Healthcare Solutions • Hospital & Primary Care Drug Forecasting Platform
 import os
 import re
 from datetime import datetime
-from typing import Optional, List, Any
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from typing import Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -441,7 +441,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 langToggle: "English",
                 themeDark: "الوضع الليلي",
                 themeLight: "الوضع النهاري",
-                userAuth: "مصرح",
                 loginBtn: "تسجيل الدخول",
                 logoutBtn: "تسجيل الخروج",
                 authBannerTitle: "تسجيل الدخول متاح",
@@ -466,8 +465,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 submitBtn: "حفظ وتأكيد الطلبية",
                 kpiTotalItems: "إجمالي الأصناف المسجلة",
                 kpiTotalQty: "إجمالي الكميات المطلوبة",
-                kpiDbStatus: "حالة النظام الذكي",
-                dbOnline: "جاهز للعمل • Active",
                 historyTitle: "سجل الطلبيات والتوقعات المحفوظة",
                 searchPlaceholder: "بحث عن صنف أو منشأة...",
                 exportBtn: "تصدير CSV",
@@ -511,7 +508,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 langToggle: "العربية",
                 themeDark: "Dark Mode",
                 themeLight: "Light Mode",
-                userAuth: "Authorized",
                 loginBtn: "Sign In",
                 logoutBtn: "Sign Out",
                 authBannerTitle: "Sign In Available",
@@ -536,8 +532,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 submitBtn: "Save & Confirm Order",
                 kpiTotalItems: "Total Recorded Drugs",
                 kpiTotalQty: "Total Ordered Quantity",
-                kpiDbStatus: "Smart Engine Status",
-                dbOnline: "Ready • Active",
                 historyTitle: "Saved Drug Forecasts & Orders History",
                 searchPlaceholder: "Search drug or facility...",
                 exportBtn: "Export CSV",
@@ -990,7 +984,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 async def get_logo():
     if os.path.exists(LOGO_PATH):
         return FileResponse(LOGO_PATH, media_type="image/png")
-    parent_logo = os.path.join(os.path.dirname(BASE_DIR), "1.png")
+    parent_logo = os.path.join(os.path.dirname(BASE_DIR), "logo.png")
     if os.path.exists(parent_logo):
         return FileResponse(parent_logo, media_type="image/png")
     raise HTTPException(status_code=404, detail="Logo not found")
