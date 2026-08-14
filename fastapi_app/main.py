@@ -237,14 +237,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">فترة التغطية (بالأيام)</label>
-                                <input type="number" step="1" min="1" value="45" id="leadDays" oninput="liveUpdateCalculation()"
+                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مدة كفاية الطلبية (عدد الأيام)</label>
+                                <input type="number" step="1" min="1" value="45" id="leadDays" oninput="liveUpdateCalculation()" placeholder="45"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
+                                <p id="i18n-leadHint" class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">30 يوم = شهر | 45 يوم = شهر ونصف | 90 يوم = 3 أشهر</p>
                             </div>
                             <div>
                                 <label id="i18n-labelBuffer" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مخزون الأمان (Buffer %)</label>
                                 <input type="number" step="1" min="0" max="100" value="10" id="safetyBuffer" oninput="liveUpdateCalculation()"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
+                                <p id="i18n-bufferHint" class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">نسبة احتياطية للطوارئ والتأخير</p>
                             </div>
                         </div>
 
@@ -456,8 +458,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 drugNameError: "يجب كتابة اسم الصنف الدوائي بالحروف الإنجليزية فقط (English Letters Only)",
                 labelAvgMonthly: "متوسط الاستهلاك الشهري",
                 labelStock: "الرصيد الحالي بالمخزن",
-                labelLead: "فترة التغطية (بالأيام)",
+                labelLead: "مدة كفاية الطلبية (عدد الأيام)",
+                leadHint: "30 يوم = شهر | 45 يوم = شهر ونصف | 90 يوم = 3 أشهر",
                 labelBuffer: "مخزون الأمان (Buffer %)",
+                bufferHint: "نسبة احتياطية للطوارئ والتأخير",
                 resultTitle: "الكمية المقترح طلبها (Recommended Order):",
                 badgeFormula: "معادلة بالأيام",
                 resultUnit: "عبوة / وحدة",
@@ -523,8 +527,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 drugNameError: "Drug name must be entered in English letters only",
                 labelAvgMonthly: "Avg Monthly Consumption",
                 labelStock: "Current Stock on Hand",
-                labelLead: "Coverage Time (Days)",
+                labelLead: "Order Coverage Duration (Days)",
+                leadHint: "30 days = 1 month | 45 days = 1.5 months | 90 days = 3 months",
                 labelBuffer: "Safety Buffer (%)",
+                bufferHint: "Emergency buffer percentage",
                 resultTitle: "Recommended Order Quantity:",
                 badgeFormula: "Days Formula",
                 resultUnit: "Packs / Units",
@@ -620,7 +626,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('i18n-labelAvgMonthly').textContent = t.labelAvgMonthly;
             document.getElementById('i18n-labelStock').textContent = t.labelStock;
             document.getElementById('i18n-labelLead').textContent = t.labelLead;
+            const leadHintEl = document.getElementById('i18n-leadHint');
+            if (leadHintEl) leadHintEl.textContent = t.leadHint;
             document.getElementById('i18n-labelBuffer').textContent = t.labelBuffer;
+            const bufferHintEl = document.getElementById('i18n-bufferHint');
+            if (bufferHintEl) bufferHintEl.textContent = t.bufferHint;
 
             document.getElementById('i18n-resultTitle').textContent = t.resultTitle;
             document.getElementById('i18n-badgeFormula').textContent = t.badgeFormula;
