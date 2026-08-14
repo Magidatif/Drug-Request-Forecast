@@ -1,0 +1,8 @@
+# Cloudflare Tunnel Configuration (cloudflared)
+tunnel: <YOUR-TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<YOUR-TUNNEL-UUID>.json
+
+ingress:
+  - hostname: forecast.yourdomain.com
+    service: http://localhost:8000
+  - service: http_status:404
