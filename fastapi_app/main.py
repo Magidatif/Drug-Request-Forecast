@@ -851,24 +851,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const t = translations[currentLang];
             if (!confirm(t.confirmClear)) return;
 
+            // Immediately wipe records from memory and local storage
+            records = [];
+            localStorage.removeItem('forecast_records');
+            renderTable();
+            updateKPIs();
+
+            // Notify backend if available
             try {
-                const res = await fetch('/api/requests', { method: 'DELETE' });
-                if (res.ok) {
-                    records = [];
-                    localStorage.removeItem('forecast_records');
-                    renderTable();
-                    updateKPIs();
-                    showToast(t.clearOkToast);
-                } else {
-                    showToast('Failed to clear database', true);
-                }
+                await fetch('/api/requests', { method: 'DELETE' });
             } catch (err) {
-                records = [];
-                localStorage.removeItem('forecast_records');
-                renderTable();
-                updateKPIs();
-                showToast(t.clearOkToast);
+                console.log('Cleared local storage cache');
             }
+
+            showToast(t.clearOkToast);
         }
 
         function toggleAuthModal() {
@@ -1339,6 +1335,7 @@ async def get_all_requests():
     return results
 
 @app.delete("/api/requests")
+@app.post("/api/requests/clear")
 async def delete_all_requests():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()

@@ -735,24 +735,20 @@
             const t = translations[currentLang];
             if (!confirm(t.confirmClear)) return;
 
+            // Immediately wipe records from memory and local storage
+            records = [];
+            localStorage.removeItem('forecast_records');
+            renderTable();
+            updateKPIs();
+
+            // Notify backend if available
             try {
-                const res = await fetch('/api/requests', { method: 'DELETE' });
-                if (res.ok) {
-                    records = [];
-                    localStorage.removeItem('forecast_records');
-                    renderTable();
-                    updateKPIs();
-                    showToast(t.clearOkToast);
-                } else {
-                    showToast('Failed to clear database', true);
-                }
+                await fetch('/api/requests', { method: 'DELETE' });
             } catch (err) {
-                records = [];
-                localStorage.removeItem('forecast_records');
-                renderTable();
-                updateKPIs();
-                showToast(t.clearOkToast);
+                console.log('Cleared local storage cache');
             }
+
+            showToast(t.clearOkToast);
         }
 
         function toggleAuthModal() {
