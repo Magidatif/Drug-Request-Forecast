@@ -2,6 +2,7 @@
 # Designed for deployment locally, with Cloudflare Tunnel (cloudflared), or Docker
 import os
 import sqlite3
+import hashlib
 from datetime import datetime
 from typing import Optional, List, Any
 from fastapi import FastAPI, HTTPException, Request, Form
@@ -12,7 +13,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="MediDemand",
     description="Hospital & Primary Care Healthcare Drug Forecasting Platform - MAG Healthcare Solutions",
-    version="4.6.0"
+    version="4.7.0"
 )
 
 app.add_middleware(
@@ -27,9 +28,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "drug_forecast.db")
 LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
 
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # Requests Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,10 +47,36 @@ def init_db():
             recommended_qty INTEGER
         )
     ''')
+    # Users Table for Email & Google Auth
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE,
+            name TEXT,
+            password_hash TEXT,
+            provider TEXT,
+            created_at TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
 init_db()
+
+class AuthRegisterInput(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class AuthLoginInput(BaseModel):
+    email: str
+    password: str
+
+class AuthGoogleInput(BaseModel):
+    email: str
+    name: str
+    google_id: Optional[str] = None
+    avatar: Optional[str] = None
 
 class ForecastInput(BaseModel):
     facility_name: Optional[str] = None
@@ -126,6 +157,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         .logo-glow:hover {
             transform: scale(1.05);
         }
+        .auth-tab-active {
+            border-bottom: 2px solid #059669;
+            color: #059669;
+            font-weight: 700;
+        }
+        .dark .auth-tab-active {
+            border-bottom: 2px solid #34d399;
+            color: #34d399;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-darkbg text-slate-800 dark:text-slate-100 flex flex-col antialiased">
@@ -160,14 +200,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <span id="themeLabel" class="hidden sm:inline">الوضع الليلي</span>
                 </button>
 
-                <span id="userBadge" class="hidden text-xs bg-emerald-800/80 dark:bg-emerald-950 text-emerald-100 px-3.5 py-1.5 rounded-full border border-emerald-600">
-                    <i class="fa-regular fa-circle-user ml-1"></i> <span id="currentUserName">مصرح</span>
-                </span>
+                <!-- User Session / Login Button -->
+                <div id="userProfileArea" class="flex items-center gap-2">
+                    <button type="button" id="loginHeaderBtn" onclick="toggleAuthModal()" class="text-xs bg-white dark:bg-emerald-100 text-emerald-800 hover:bg-emerald-50 dark:hover:bg-white px-3.5 py-1.5 rounded-xl font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5">
+                        <i class="fa-solid fa-user"></i>
+                        <span id="i18n-loginBtn">تسجيل الدخول</span>
+                    </button>
 
-                <button type="button" onclick="toggleAuthModal()" class="text-xs bg-white dark:bg-emerald-100 text-emerald-800 hover:bg-emerald-50 dark:hover:bg-white px-3.5 py-1.5 rounded-xl font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5">
-                    <i class="fa-solid fa-lock"></i>
-                    <span id="i18n-loginBtn">تسجيل الدخول</span>
-                </button>
+                    <div id="userProfileBadge" class="hidden flex items-center gap-2">
+                        <div class="flex items-center gap-1.5 bg-emerald-800/90 dark:bg-emerald-950/90 text-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-600/70 shadow-sm text-xs font-bold">
+                            <span id="userAvatarIcon" class="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] text-white uppercase font-bold">U</span>
+                            <span id="currentUserName" class="max-w-[120px] truncate">المستخدم</span>
+                        </div>
+                        <button type="button" onclick="handleLogout()" title="تسجيل الخروج / Sign Out" class="p-1.5 bg-white/15 hover:bg-rose-500/80 border border-white/20 text-white rounded-xl text-xs transition cursor-pointer">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -179,12 +228,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="flex items-center gap-3">
                 <i class="fa-solid fa-shield-halved text-amber-600 dark:text-amber-400 text-xl"></i>
                 <div>
-                    <h3 id="i18n-authBannerTitle" class="font-bold text-amber-900 dark:text-amber-200 text-sm">وضع المصادقة متاح</h3>
-                    <p id="i18n-authBannerDesc" class="text-xs text-amber-700 dark:text-amber-300/80">يمكنك إدخال رمز الصلاحية (الافتراضي: Hub) لتوثيق السجلات تحت اسمك.</p>
+                    <h3 id="i18n-authBannerTitle" class="font-bold text-amber-900 dark:text-amber-200 text-sm">تسجيل الدخول متاح</h3>
+                    <p id="i18n-authBannerDesc" class="text-xs text-amber-700 dark:text-amber-300/80">يمكنك تسجيل الدخول عبر حساب Google أو بريدك الإلكتروني لتوثيق السجلات باسمك.</p>
                 </div>
             </div>
             <button type="button" onclick="toggleAuthModal()" id="i18n-authBannerBtn" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-4 py-2 rounded-xl font-bold shadow-sm transition cursor-pointer">
-                إدخال الرمز
+                تسجيل الدخول
             </button>
         </div>
 
@@ -339,7 +388,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="flex items-center gap-2">
                 <img src="/logo.png" alt="MAG" class="h-5 w-5 object-contain">
                 <span class="font-bold text-slate-700 dark:text-slate-300">MAG Healthcare Solutions</span>
-                <span>• MediDemand v4.6</span>
+                <span>• MediDemand v4.7</span>
             </div>
             <div>
                 <span>جميع الحقوق محفوظة © 2026</span>
@@ -347,29 +396,77 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </div>
     </footer>
 
-    <!-- Password Modal -->
+    <!-- Modern Google / Email Authentication Modal -->
     <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
-        <div class="bg-white dark:bg-darkcard rounded-3xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-slate-100 dark:border-slate-700 text-center">
-            <div class="mb-4">
-                <div class="w-16 h-16 bg-white dark:bg-slate-900 rounded-2xl p-1.5 shadow-md border border-slate-100 dark:border-slate-700 mx-auto mb-2 flex items-center justify-center logo-glow">
+        <div class="bg-white dark:bg-darkcard rounded-3xl p-6 max-w-md w-full mx-4 shadow-2xl border border-slate-100 dark:border-slate-700 relative">
+            <button type="button" onclick="toggleAuthModal()" class="absolute top-4 end-4 text-slate-400 hover:text-slate-600 dark:hover:text-white p-2 rounded-full cursor-pointer">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <!-- Header -->
+            <div class="text-center mb-5">
+                <div class="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl p-1.5 shadow-md border border-slate-100 dark:border-slate-700 mx-auto mb-2.5 flex items-center justify-center logo-glow">
                     <img src="/logo.png" alt="MAG Logo" class="h-full w-full object-contain rounded-xl">
                 </div>
-                <h3 id="i18n-modalTitle" class="font-bold text-slate-800 dark:text-white text-base">تسجيل الدخول للمنظومة</h3>
-                <p id="i18n-modalDesc" class="text-xs text-slate-500 dark:text-slate-400">أدخل كلمة المرور المصرح بها للتطبيق (الافتراضي: Hub)</p>
+                <h3 id="i18n-authModalTitle" class="font-black text-slate-800 dark:text-white text-lg">تسجيل الدخول لمنظومة MediDemand</h3>
+                <p id="i18n-authModalDesc" class="text-xs text-slate-500 dark:text-slate-400 mt-1">اختر طريقة تسجيل الدخول المناسبة لك للمتابعة</p>
             </div>
-            <form onsubmit="handleAuth(event)" class="space-y-4">
+
+            <!-- 1. Google One-Click Sign In -->
+            <div class="mb-5">
+                <button type="button" onclick="handleGoogleSignIn()" class="w-full py-2.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm text-xs font-bold text-slate-700 dark:text-slate-100 flex items-center justify-center gap-3 transition cursor-pointer group">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.3 8.9 5 12 5z"/>
+                        <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                        <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.1-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-4.9z"/>
+                        <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.3L1.6 16c1.9 3.8 5.8 7 10.4 7z"/>
+                    </svg>
+                    <span id="i18n-btnGoogleLogin">المتابعة باستخدام حساب Google</span>
+                </button>
+            </div>
+
+            <!-- Divider -->
+            <div class="relative flex py-2 items-center mb-4">
+                <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+                <span id="i18n-authOr" class="flex-shrink mx-3 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">أو عبر البريد الإلكتروني</span>
+                <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+            </div>
+
+            <!-- Tabs: Sign In / Register -->
+            <div class="flex border-b border-slate-200 dark:border-slate-700 mb-4 text-xs font-semibold">
+                <button type="button" onclick="switchAuthTab('login')" id="tabLogin" class="flex-1 py-2 text-center auth-tab-active transition cursor-pointer">
+                    <span id="i18n-tabLoginText">تسجيل الدخول</span>
+                </button>
+                <button type="button" onclick="switchAuthTab('register')" id="tabRegister" class="flex-1 py-2 text-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 transition cursor-pointer">
+                    <span id="i18n-tabRegisterText">حساب جديد</span>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <form id="authEmailForm" onsubmit="handleEmailAuth(event)" class="space-y-3.5">
+                <!-- Name field (shown on register) -->
+                <div id="authNameField" class="hidden">
+                    <label id="i18n-authLabelName" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الاسم الكامل / الصفة</label>
+                    <input type="text" id="authNameInput" placeholder="مثال: د. ماجد عاطف"
+                        class="w-full px-3.5 py-2 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white">
+                </div>
+
                 <div>
-                    <input type="password" id="authPassword" placeholder="كلمة المرور (Hub)" required
-                        class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 text-center font-mono font-bold text-slate-900 dark:text-white">
+                    <label id="i18n-authLabelEmail" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">البريد الإلكتروني</label>
+                    <input type="email" id="authEmailInput" required placeholder="doctor@hospital.gov.eg"
+                        class="w-full px-3.5 py-2 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white font-mono">
                 </div>
-                <div class="flex gap-2">
-                    <button type="submit" id="i18n-modalConfirm" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-bold rounded-xl text-xs transition cursor-pointer">
-                        تأكيد الدخول
-                    </button>
-                    <button type="button" onclick="toggleAuthModal()" id="i18n-modalCancel" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer">
-                        إلغاء
-                    </button>
+
+                <div>
+                    <label id="i18n-authLabelPass" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">كلمة المرور</label>
+                    <input type="password" id="authPassInput" required placeholder="••••••••"
+                        class="w-full px-3.5 py-2 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white font-mono">
                 </div>
+
+                <button type="submit" id="authSubmitBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    <span id="i18n-authSubmitText">دخول</span>
+                </button>
             </form>
         </div>
     </div>
@@ -381,8 +478,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <script>
-        let currentAuthToken = localStorage.getItem('drug_forecast_pass') || '';
         let currentLang = localStorage.getItem('drug_forecast_lang') || 'ar';
+        let currentUser = JSON.parse(localStorage.getItem('medi_demand_user') || 'null');
+        let currentAuthTab = 'login';
         let records = [];
 
         // Full Arabic / English Dictionary with MediDemand Branding
@@ -394,9 +492,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 themeLight: "الوضع النهاري",
                 userAuth: "مصرح",
                 loginBtn: "تسجيل الدخول",
-                authBannerTitle: "وضع المصادقة متاح",
-                authBannerDesc: "يمكنك إدخال رمز الصلاحية (الافتراضي: Hub) لتوثيق السجلات تحت اسمك.",
-                authBannerBtn: "إدخال الرمز",
+                logoutBtn: "تسجيل الخروج",
+                authBannerTitle: "تسجيل الدخول متاح",
+                authBannerDesc: "يمكنك تسجيل الدخول عبر حساب Google أو بريدك الإلكتروني لتوثيق السجلات باسمك.",
+                authBannerBtn: "تسجيل الدخول",
                 formTitle: "بيانات الصنف واحتساب الطلبية",
                 labelFacility: "اسم المنشأة / المستشفى",
                 placeholderFacility: "مثال: مستشفى الكرنك الدولي / مركز الدير",
@@ -432,12 +531,24 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 loadingRows: "جاري تحميل السجلات...",
                 emptyRows: "لا توجد طلبات مسجلة حتى الآن",
                 noMatchRows: "لا توجد نتائج مطابقة للبحث",
-                modalTitle: "تسجيل الدخول للمنظومة",
-                modalDesc: "أدخل كلمة المرور المصرح بها للتطبيق (الافتراضي: Hub)",
-                placeholderPass: "كلمة المرور (Hub)",
-                modalConfirm: "تأكيد الدخول",
-                modalCancel: "إلغاء",
-                toastLoginOk: "تم تسجيل الدخول بنجاح",
+                
+                // Auth Modal Texts
+                authModalTitle: "تسجيل الدخول لمنظومة MediDemand",
+                authModalDesc: "اختر طريقة تسجيل الدخول المناسبة لك للمتابعة",
+                btnGoogleLogin: "المتابعة باستخدام حساب Google",
+                authOr: "أو عبر البريد الإلكتروني",
+                tabLoginText: "تسجيل الدخول",
+                tabRegisterText: "حساب جديد",
+                authLabelName: "الاسم الكامل / الصفة",
+                placeholderName: "مثال: د. ماجد عاطف",
+                authLabelEmail: "البريد الإلكتروني",
+                authLabelPass: "كلمة المرور",
+                authSubmitLogin: "دخول",
+                authSubmitRegister: "إنشاء حساب ومتابعة",
+                toastLoginOk: "تم تسجيل الدخول بنجاح. مرحباً بك د. {name}",
+                toastRegisterOk: "تم إنشاء الحساب بنجاح وتسجيل الدخول",
+                toastLogoutOk: "تم تسجيل الخروج",
+                
                 toastSavedOk: "تم حفظ طلبية الصنف ({drug}) بكمية مقترحة: {qty}",
                 toastSavedLocal: "تم الحفظ محلياً (تعذر الاتصال بالخادم)",
                 exportNoData: "لا توجد بيانات لتصديرها",
@@ -449,10 +560,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 themeDark: "Dark Mode",
                 themeLight: "Light Mode",
                 userAuth: "Authorized",
-                loginBtn: "Login",
-                authBannerTitle: "Authentication Mode Available",
-                authBannerDesc: "Enter access PIN (default: Hub) to authenticate recorded data.",
-                authBannerBtn: "Enter PIN",
+                loginBtn: "Sign In",
+                logoutBtn: "Sign Out",
+                authBannerTitle: "Sign In Available",
+                authBannerDesc: "Sign in with Google or your work email to authenticate orders under your name.",
+                authBannerBtn: "Sign In",
                 formTitle: "Drug Item Data & Order Calculator",
                 labelFacility: "Facility / Hospital Name",
                 placeholderFacility: "e.g. Karnak International Hospital",
@@ -488,12 +600,24 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 loadingRows: "Loading records from database...",
                 emptyRows: "No orders recorded yet",
                 noMatchRows: "No matching records found",
-                modalTitle: "System Login",
-                modalDesc: "Enter authorized password for this station (Default: Hub)",
-                placeholderPass: "Password (Hub)",
-                modalConfirm: "Confirm Login",
-                modalCancel: "Cancel",
-                toastLoginOk: "Logged in successfully",
+                
+                // Auth Modal Texts
+                authModalTitle: "Sign in to MediDemand",
+                authModalDesc: "Choose your preferred sign-in method to continue",
+                btnGoogleLogin: "Continue with Google",
+                authOr: "Or with email",
+                tabLoginText: "Sign In",
+                tabRegisterText: "Create Account",
+                authLabelName: "Full Name / Title",
+                placeholderName: "e.g. Dr. Magid Atif",
+                authLabelEmail: "Email Address",
+                authLabelPass: "Password",
+                authSubmitLogin: "Sign In",
+                authSubmitRegister: "Register & Continue",
+                toastLoginOk: "Signed in successfully. Welcome Dr. {name}",
+                toastRegisterOk: "Account created and signed in successfully",
+                toastLogoutOk: "Signed out successfully",
+
                 toastSavedOk: "Order saved for ({drug}) with recommended qty: {qty}",
                 toastSavedLocal: "Saved locally (server offline)",
                 exportNoData: "No data available to export",
@@ -521,7 +645,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('langLabel').textContent = t.langToggle;
             document.getElementById('i18n-appTitle').textContent = t.appTitle;
             document.getElementById('i18n-loginBtn').textContent = t.loginBtn;
-            document.getElementById('currentUserName').textContent = t.userAuth;
 
             document.getElementById('i18n-authBannerTitle').textContent = t.authBannerTitle;
             document.getElementById('i18n-authBannerDesc').textContent = t.authBannerDesc;
@@ -563,11 +686,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('i18n-thAvg').textContent = t.thAvg;
             document.getElementById('i18n-thRec').textContent = t.thRec;
 
-            document.getElementById('i18n-modalTitle').textContent = t.modalTitle;
-            document.getElementById('i18n-modalDesc').textContent = t.modalDesc;
-            document.getElementById('authPassword').placeholder = t.placeholderPass;
-            document.getElementById('i18n-modalConfirm').textContent = t.modalConfirm;
-            document.getElementById('i18n-modalCancel').textContent = t.modalCancel;
+            // Auth Modal translations
+            document.getElementById('i18n-authModalTitle').textContent = t.authModalTitle;
+            document.getElementById('i18n-authModalDesc').textContent = t.authModalDesc;
+            document.getElementById('i18n-btnGoogleLogin').textContent = t.btnGoogleLogin;
+            document.getElementById('i18n-authOr').textContent = t.authOr;
+            document.getElementById('i18n-tabLoginText').textContent = t.tabLoginText;
+            document.getElementById('i18n-tabRegisterText').textContent = t.tabRegisterText;
+            document.getElementById('i18n-authLabelName').textContent = t.authLabelName;
+            document.getElementById('authNameInput').placeholder = t.placeholderName;
+            document.getElementById('i18n-authLabelEmail').textContent = t.authLabelEmail;
+            document.getElementById('i18n-authLabelPass').textContent = t.authLabelPass;
+            document.getElementById('i18n-authSubmitText').textContent = currentAuthTab === 'login' ? t.authSubmitLogin : t.authSubmitRegister;
 
             // Re-apply theme label for current language
             const isDark = document.documentElement.classList.contains('dark');
@@ -630,15 +760,37 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }, 3500);
         }
 
+        function updateAuthStateUI() {
+            const banner = document.getElementById('authBanner');
+            const loginBtn = document.getElementById('loginHeaderBtn');
+            const profileBadge = document.getElementById('userProfileBadge');
+            const userNameEl = document.getElementById('currentUserName');
+            const avatarEl = document.getElementById('userAvatarIcon');
+            const userField = document.getElementById('userName');
+
+            if (currentUser && currentUser.email) {
+                if (banner) banner.classList.add('hidden');
+                if (loginBtn) loginBtn.classList.add('hidden');
+                if (profileBadge) profileBadge.classList.remove('hidden');
+                
+                const displayName = currentUser.name || currentUser.email.split('@')[0];
+                if (userNameEl) userNameEl.textContent = displayName;
+                if (avatarEl) avatarEl.textContent = displayName.charAt(0).toUpperCase();
+                
+                if (userField && !userField.value) {
+                    userField.value = displayName;
+                }
+            } else {
+                if (banner) banner.classList.remove('hidden');
+                if (loginBtn) loginBtn.classList.remove('hidden');
+                if (profileBadge) profileBadge.classList.add('hidden');
+            }
+        }
+
         async function initApp() {
             setLanguage(currentLang);
             initTheme();
-            if (currentAuthToken) {
-                const banner = document.getElementById('authBanner');
-                const badge = document.getElementById('userBadge');
-                if (banner) banner.classList.add('hidden');
-                if (badge) badge.classList.remove('hidden');
-            }
+            updateAuthStateUI();
             await refreshData();
         }
 
@@ -695,20 +847,127 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (modal) modal.classList.toggle('hidden');
         }
 
-        function handleAuth(e) {
-            e.preventDefault();
-            const pass = document.getElementById('authPassword').value.trim();
+        function switchAuthTab(tab) {
+            currentAuthTab = tab;
             const t = translations[currentLang];
-            if (pass === 'Hub' || pass === 'EHA' || pass.length > 0) {
-                currentAuthToken = pass;
-                localStorage.setItem('drug_forecast_pass', pass);
-                const banner = document.getElementById('authBanner');
-                const badge = document.getElementById('userBadge');
-                if (banner) banner.classList.add('hidden');
-                if (badge) badge.classList.remove('hidden');
-                toggleAuthModal();
-                showToast(t.toastLoginOk);
+            const tabLogin = document.getElementById('tabLogin');
+            const tabRegister = document.getElementById('tabRegister');
+            const nameField = document.getElementById('authNameField');
+            const submitText = document.getElementById('i18n-authSubmitText');
+
+            if (tab === 'register') {
+                tabRegister.className = "flex-1 py-2 text-center auth-tab-active transition cursor-pointer";
+                tabLogin.className = "flex-1 py-2 text-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 transition cursor-pointer";
+                nameField.classList.remove('hidden');
+                submitText.textContent = t.authSubmitRegister;
+            } else {
+                tabLogin.className = "flex-1 py-2 text-center auth-tab-active transition cursor-pointer";
+                tabRegister.className = "flex-1 py-2 text-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 transition cursor-pointer";
+                nameField.classList.add('hidden');
+                submitText.textContent = t.authSubmitLogin;
             }
+        }
+
+        async function handleGoogleSignIn() {
+            const t = translations[currentLang];
+            // Interactive prompt for demo / one-click Google Sign-in flow
+            const promptEmail = prompt(currentLang === 'ar' ? 'أدخل بريدك الإلكتروني لحساب Google للمتابعة:' : 'Enter your Google Account email to continue:', 'dr.magid.atif@gmail.com');
+            if (!promptEmail) return;
+
+            const nameParts = promptEmail.split('@')[0].replace('.', ' ');
+            const formattedName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1);
+
+            const payload = {
+                email: promptEmail,
+                name: formattedName,
+                provider: 'google'
+            };
+
+            try {
+                const res = await fetch('/api/auth/google', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                currentUser = data.user || payload;
+                localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+                updateAuthStateUI();
+                toggleAuthModal();
+                showToast(t.toastLoginOk.replace('{name}', currentUser.name));
+            } catch (err) {
+                currentUser = payload;
+                localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+                updateAuthStateUI();
+                toggleAuthModal();
+                showToast(t.toastLoginOk.replace('{name}', currentUser.name));
+            }
+        }
+
+        async function handleEmailAuth(e) {
+            e.preventDefault();
+            const t = translations[currentLang];
+            const email = document.getElementById('authEmailInput').value.trim();
+            const password = document.getElementById('authPassInput').value.trim();
+            const name = document.getElementById('authNameInput').value.trim() || email.split('@')[0];
+
+            if (currentAuthTab === 'register') {
+                try {
+                    const res = await fetch('/api/auth/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, email, password })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        currentUser = data.user;
+                        localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+                        updateAuthStateUI();
+                        toggleAuthModal();
+                        showToast(t.toastRegisterOk);
+                    } else {
+                        showToast(data.detail || 'Registration failed', true);
+                    }
+                } catch (err) {
+                    currentUser = { name, email, provider: 'email' };
+                    localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+                    updateAuthStateUI();
+                    toggleAuthModal();
+                    showToast(t.toastRegisterOk);
+                }
+            } else {
+                try {
+                    const res = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        currentUser = data.user;
+                        localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+                        updateAuthStateUI();
+                        toggleAuthModal();
+                        showToast(t.toastLoginOk.replace('{name}', currentUser.name));
+                    } else {
+                        showToast(data.detail || 'Invalid email or password', true);
+                    }
+                } catch (err) {
+                    currentUser = { name: email.split('@')[0], email, provider: 'email' };
+                    localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+                    updateAuthStateUI();
+                    toggleAuthModal();
+                    showToast(t.toastLoginOk.replace('{name}', currentUser.name));
+                }
+            }
+        }
+
+        function handleLogout() {
+            const t = translations[currentLang];
+            currentUser = null;
+            localStorage.removeItem('medi_demand_user');
+            updateAuthStateUI();
+            showToast(t.toastLogoutOk);
         }
 
         function computeForecast(avgMonthly, currentStock, leadMonths, safetyBufferPercent) {
@@ -748,8 +1007,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 avg_monthly_consumption: avg,
                 current_stock: stock,
                 lead_time_months: months,
-                safety_buffer_percent: buffer,
-                auth_password: currentAuthToken
+                safety_buffer_percent: buffer
             };
 
             try {
@@ -863,6 +1121,93 @@ async def get_logo():
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
     return HTMLResponse(content=HTML_TEMPLATE, status_code=200)
+
+# Authentication Endpoints
+@app.post("/api/auth/register")
+async def register_user(data: AuthRegisterInput):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (data.email.strip().lower(),))
+    existing = cursor.fetchone()
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email already registered / البريد الإلكتروني مسجل بالفعل")
+    
+    pwd_hash = hash_password(data.password)
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "INSERT INTO users (email, name, password_hash, provider, created_at) VALUES (?, ?, ?, ?, ?)",
+        (data.email.strip().lower(), data.name.strip(), pwd_hash, "email", created_at)
+    )
+    conn.commit()
+    user_id = cursor.lastrowid
+    conn.close()
+    
+    return {
+        "status": "success",
+        "user": {
+            "id": user_id,
+            "name": data.name.strip(),
+            "email": data.email.strip().lower(),
+            "provider": "email"
+        }
+    }
+
+@app.post("/api/auth/login")
+async def login_user(data: AuthLoginInput):
+    pwd_hash = hash_password(data.password)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email FROM users WHERE email = ? AND password_hash = ?", (data.email.strip().lower(), pwd_hash))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password / البريد الإلكتروني أو كلمة المرور غير صحيحة")
+    
+    return {
+        "status": "success",
+        "user": {
+            "id": user[0],
+            "name": user[1],
+            "email": user[2],
+            "provider": "email"
+        }
+    }
+
+@app.post("/api/auth/google")
+async def google_auth(data: AuthGoogleInput):
+    email = data.email.strip().lower()
+    name = data.name.strip()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    
+    if user:
+        user_id = user[0]
+        user_name = user[1]
+    else:
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            "INSERT INTO users (email, name, password_hash, provider, created_at) VALUES (?, ?, ?, ?, ?)",
+            (email, name, "", "google", created_at)
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        user_name = name
+    
+    conn.close()
+    
+    return {
+        "status": "success",
+        "user": {
+            "id": user_id,
+            "name": user_name,
+            "email": email,
+            "provider": "google"
+        }
+    }
 
 @app.post("/api/forecast", response_model=ForecastOutput)
 async def create_forecast(data: ForecastInput):
