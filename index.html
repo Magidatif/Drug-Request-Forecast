@@ -134,6 +134,7 @@
                         <h2 id="i18n-formTitle" class="font-bold text-slate-800 dark:text-white text-lg">بيانات واحتساب طلبية الصنف</h2>
                     </div>
 
+                    <form id="forecastForm" onsubmit="handleCalculate(event)" novalidate class="space-y-4">
                         <!-- Row 1: Facility Name (Right) & User Name (Left) -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -152,7 +153,7 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label id="i18n-labelDrug" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">اسم الصنف</label>
-                                <input type="text" id="drugName" required placeholder="e.g. Paracetamol 500mg" dir="ltr"
+                                <input type="text" id="drugName" placeholder="e.g. Paracetamol 500mg" dir="ltr"
                                     oninput="onDrugNameInput(this)"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-sans">
                                 <p id="drugNameError" class="hidden text-[11px] text-rose-500 dark:text-rose-400 font-bold mt-1 flex items-center gap-1 animate-pulse">
@@ -875,8 +876,8 @@
         }
 
         function handleCalculate(e) {
-            e.preventDefault();
-            const drug = document.getElementById('drugName').value.trim();
+            if (e) e.preventDefault();
+            let drug = document.getElementById('drugName').value.trim();
             const m1 = parseFloat(document.getElementById('m1Consumption').value) || 0;
             const m2 = parseFloat(document.getElementById('m2Consumption').value) || 0;
             const m3 = parseFloat(document.getElementById('m3Consumption').value) || 0;
@@ -886,6 +887,11 @@
             const facility = document.getElementById('facilityName').value.trim() || 'العام';
             const user = document.getElementById('userName').value.trim() || 'المسؤول';
             const t = translations[currentLang];
+
+            // If empty, set friendly default
+            if (!drug) {
+                drug = currentLang === 'ar' ? 'صنف غير محدد' : 'General Drug Item';
+            }
 
             // Validation: Drug name MUST be in English only
             if (/[\u0600-\u06FF]/.test(drug)) {
