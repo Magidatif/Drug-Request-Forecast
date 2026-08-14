@@ -5,14 +5,14 @@ import sqlite3
 from datetime import datetime
 from typing import Optional, List, Any
 from fastapi import FastAPI, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
     title="MediDemand",
-    description="Hospital & Primary Care Healthcare Drug Forecasting Platform",
-    version="4.5.0"
+    description="Hospital & Primary Care Healthcare Drug Forecasting Platform - MAG Healthcare Solutions",
+    version="4.6.0"
 )
 
 app.add_middleware(
@@ -25,6 +25,7 @@ app.add_middleware(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "drug_forecast.db")
+LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -83,7 +84,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediDemand</title>
+    <title>MediDemand • MAG Healthcare Solutions</title>
+    <link rel="icon" type="image/png" href="/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -117,20 +119,33 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         .stat-card:hover {
             transform: translateY(-2px);
         }
+        .logo-glow {
+            filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
+            transition: transform 0.3s ease;
+        }
+        .logo-glow:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-darkbg text-slate-800 dark:text-slate-100 flex flex-col antialiased">
     <!-- Navbar -->
     <header class="glass-header text-white sticky top-0 z-50 transition-colors duration-300">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 shadow-inner">
-                    <i class="fa-solid fa-pills text-2xl text-emerald-300"></i>
-                </div>
-                <div class="flex items-center gap-2">
-                    <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans">MediDemand</h1>
-                    <span class="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
-                </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+            <!-- Brand & Logo -->
+            <div class="flex items-center gap-3.5">
+                <a href="/" class="flex items-center gap-3 group">
+                    <div class="p-1 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-white/20 dark:border-slate-700/60 logo-glow flex items-center justify-center">
+                        <img src="/logo.png" alt="MAG Healthcare Solutions" class="h-10 w-10 sm:h-11 sm:w-11 object-contain rounded-xl">
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans text-white group-hover:text-emerald-100 transition">MediDemand</span>
+                            <span class="text-[10px] bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
+                        </div>
+                        <span class="text-[10px] font-semibold text-emerald-200/90 tracking-wide block">MAG Healthcare Solutions</span>
+                    </div>
+                </a>
             </div>
             
             <div class="flex items-center gap-2 sm:gap-2.5">
@@ -152,7 +167,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <i class="fa-regular fa-circle-user ml-1"></i> <span id="currentUserName">مصرح</span>
                 </span>
 
-                <button type="button" onclick="toggleAuthModal()" class="text-xs bg-white dark:bg-emerald-100 text-emerald-800 hover:bg-emerald-50 dark:hover:bg-white px-3.5 py-1.5 rounded-xl font-bold shadow-sm transition cursor-pointer flex items-center gap-1">
+                <button type="button" onclick="toggleAuthModal()" class="text-xs bg-white dark:bg-emerald-100 text-emerald-800 hover:bg-emerald-50 dark:hover:bg-white px-3.5 py-1.5 rounded-xl font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5">
                     <i class="fa-solid fa-lock"></i>
                     <span id="i18n-loginBtn">تسجيل الدخول</span>
                 </button>
@@ -321,12 +336,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </div>
     </main>
 
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-slate-200/80 dark:border-slate-800 py-4 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <div class="flex items-center gap-2">
+                <img src="/logo.png" alt="MAG" class="h-5 w-5 object-contain">
+                <span class="font-bold text-slate-700 dark:text-slate-300">MAG Healthcare Solutions</span>
+                <span>• MediDemand v4.6</span>
+            </div>
+            <div>
+                <span>جميع الحقوق محفوظة © 2026</span>
+            </div>
+        </div>
+    </footer>
+
     <!-- Password Modal -->
     <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
-        <div class="bg-white dark:bg-darkcard rounded-3xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-slate-100 dark:border-slate-700">
-            <div class="text-center mb-4">
-                <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-2 text-xl">
-                    <i class="fa-solid fa-lock"></i>
+        <div class="bg-white dark:bg-darkcard rounded-3xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-slate-100 dark:border-slate-700 text-center">
+            <div class="mb-4">
+                <div class="w-16 h-16 bg-white dark:bg-slate-900 rounded-2xl p-1.5 shadow-md border border-slate-100 dark:border-slate-700 mx-auto mb-2 flex items-center justify-center logo-glow">
+                    <img src="/logo.png" alt="MAG Logo" class="h-full w-full object-contain rounded-xl">
                 </div>
                 <h3 id="i18n-modalTitle" class="font-bold text-slate-800 dark:text-white text-base">تسجيل الدخول للمنظومة</h3>
                 <p id="i18n-modalDesc" class="text-xs text-slate-500 dark:text-slate-400">أدخل كلمة المرور المصرح بها للتطبيق (الافتراضي: Hub)</p>
@@ -824,6 +853,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </body>
 </html>
 """
+
+@app.get("/logo.png")
+async def get_logo():
+    if os.path.exists(LOGO_PATH):
+        return FileResponse(LOGO_PATH, media_type="image/png")
+    parent_logo = os.path.join(os.path.dirname(BASE_DIR), "1.png")
+    if os.path.exists(parent_logo):
+        return FileResponse(parent_logo, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Logo not found")
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
