@@ -139,10 +139,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         <img src="/logo.png" alt="MAG Healthcare Solutions" class="h-10 w-10 sm:h-11 sm:w-11 object-contain rounded-xl">
                     </div>
                     <div>
-                        <div class="flex items-center gap-2">
-                            <span id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans text-white group-hover:text-emerald-100 transition">MediDemand</span>
-                            <span class="text-[10px] bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
-                        </div>
+                        <span id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans text-white group-hover:text-emerald-100 transition">MediDemand</span>
                         <span class="text-[10px] font-semibold text-emerald-200/90 tracking-wide block">MAG Healthcare Solutions</span>
                     </div>
                 </a>

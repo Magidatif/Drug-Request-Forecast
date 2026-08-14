@@ -54,9 +54,9 @@ HTML_CONTENT = r"""<!DOCTYPE html>
                 <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 shadow-inner">
                     <i class="fa-solid fa-pills text-2xl text-emerald-300"></i>
                 </div>
-                <div class="flex items-center gap-2">
-                    <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans">MediDemand</h1>
-                    <span class="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
+                <div>
+                    <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans text-white">MediDemand</h1>
+                    <span class="text-[10px] font-semibold text-emerald-200/90 tracking-wide block">MAG Healthcare Solutions</span>
                 </div>
             </div>
             
