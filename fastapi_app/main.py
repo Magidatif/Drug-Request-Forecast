@@ -12,7 +12,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="MediDemand",
     description="Hospital & Primary Care Healthcare Drug Forecasting Platform",
-    version="4.4.0"
+    version="4.5.0"
 )
 
 app.add_middleware(
@@ -83,7 +83,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediDemand - نظام التنبؤ باحتياجات الأدوية</title>
+    <title>MediDemand</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -127,12 +127,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 shadow-inner">
                     <i class="fa-solid fa-pills text-2xl text-emerald-300"></i>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans">MediDemand</h1>
-                        <span class="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
-                    </div>
-                    <p id="i18n-appSubtitle" class="text-xs text-emerald-100/90 dark:text-emerald-200/80">نظام التنبؤ الذكي بطلبيات واحتياجات الأدوية • FastAPI + SQLite</p>
+                <div class="flex items-center gap-2">
+                    <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans">MediDemand</h1>
+                    <span class="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
                 </div>
             </div>
             
@@ -366,7 +363,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         const translations = {
             ar: {
                 appTitle: "MediDemand",
-                appSubtitle: "نظام التنبؤ الذكي بطلبيات واحتياجات الأدوية • FastAPI + SQLite",
                 langToggle: "English",
                 themeDark: "الوضع الليلي",
                 themeLight: "الوضع النهاري",
@@ -423,7 +419,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             },
             en: {
                 appTitle: "MediDemand",
-                appSubtitle: "Intelligent Healthcare Drug Demand Forecasting Engine • FastAPI + SQLite",
                 langToggle: "العربية",
                 themeDark: "Dark Mode",
                 themeLight: "Light Mode",
@@ -499,7 +494,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             // Update text elements
             document.getElementById('langLabel').textContent = t.langToggle;
             document.getElementById('i18n-appTitle').textContent = t.appTitle;
-            document.getElementById('i18n-appSubtitle').textContent = t.appSubtitle;
             document.getElementById('i18n-loginBtn').textContent = t.loginBtn;
             document.getElementById('currentUserName').textContent = t.userAuth;
 
