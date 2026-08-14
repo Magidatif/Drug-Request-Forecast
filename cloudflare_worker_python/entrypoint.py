@@ -1,16 +1,16 @@
 # Cloudflare Workers Python Entrypoint
-# Drug Request Forecast Application
+# MediDemand Application
 from js import Response, Headers, JSON
 import json
 from datetime import datetime
 
-# HTML Interface (Bilingual AR / EN Healthcare Dashboard with Day/Night Mode)
+# HTML Interface (MediDemand Bilingual AR / EN Healthcare Dashboard with Day/Night Mode)
 HTML_CONTENT = r"""<!DOCTYPE html>
 <html lang="ar" dir="rtl" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drug Request Forecast - نظام توقع طلبات الأدوية</title>
+    <title>MediDemand - نظام التنبؤ باحتياجات الأدوية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -27,7 +27,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
         };
     </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Cairo', 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
         .glass-header {
@@ -51,12 +51,15 @@ HTML_CONTENT = r"""<!DOCTYPE html>
     <header class="glass-header text-white sticky top-0 z-50 transition-colors duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10">
+                <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 shadow-inner">
                     <i class="fa-solid fa-pills text-2xl text-emerald-300"></i>
                 </div>
                 <div>
-                    <h1 id="i18n-appTitle" class="text-xl font-bold tracking-tight">نظام التنبؤ باحتياجات الأدوية</h1>
-                    <p id="i18n-appSubtitle" class="text-xs text-emerald-100/90 dark:text-emerald-200/80">Drug Request Forecast Engine • Cloudflare Python</p>
+                    <div class="flex items-center gap-2">
+                        <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans">MediDemand</h1>
+                        <span class="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
+                    </div>
+                    <p id="i18n-appSubtitle" class="text-xs text-emerald-100/90 dark:text-emerald-200/80">نظام التنبؤ الذكي بطلبيات واحتياجات الأدوية • Cloudflare Python</p>
                 </div>
             </div>
             
@@ -89,13 +92,13 @@ HTML_CONTENT = r"""<!DOCTYPE html>
 
     <!-- Main Container -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
-        <!-- Auth Warning Banner -->
+        <!-- Auth Warning / Password Overlay -->
         <div id="authBanner" class="mb-6 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-center justify-between shadow-sm transition-colors">
             <div class="flex items-center gap-3">
                 <i class="fa-solid fa-shield-halved text-amber-600 dark:text-amber-400 text-xl"></i>
                 <div>
-                    <h3 id="i18n-authBannerTitle" class="font-bold text-amber-900 dark:text-amber-200 text-sm">وضع المصادقة متاح</h3>
-                    <p id="i18n-authBannerDesc" class="text-xs text-amber-700 dark:text-amber-300/80">يمكنك إدخال رمز الصلاحية (الافتراضي: Hub) لتوثيق السجلات تحت اسمك.</p>
+                    <h3 id="i18n-authBannerTitle" class="font-bold text-amber-900 dark:text-amber-200 text-sm">وضع المصادقة مطلوب</h3>
+                    <p id="i18n-authBannerDesc" class="text-xs text-amber-700 dark:text-amber-300/80">يرجى إدخال كلمة المرور (الافتراضية: Hub) للتمكن من حفظ السجلات في قاعدة البيانات.</p>
                 </div>
             </div>
             <button type="button" onclick="toggleAuthModal()" id="i18n-authBannerBtn" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-4 py-2 rounded-xl font-bold shadow-sm transition cursor-pointer">
@@ -146,12 +149,12 @@ HTML_CONTENT = r"""<!DOCTYPE html>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">فترة التغطية (أشهر)</label>
+                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">فترة التغطية المطلوبة (بالأشهر)</label>
                                 <input type="number" step="0.1" min="0.5" value="1.5" id="leadMonths" oninput="liveUpdateCalculation()"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
                             </div>
                             <div>
-                                <label id="i18n-labelBuffer" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مخزون الأمان (Buffer %)</label>
+                                <label id="i18n-labelBuffer" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مخزون الأمان (Safety Buffer %)</label>
                                 <input type="number" step="1" min="0" max="100" value="10" id="safetyBuffer" oninput="liveUpdateCalculation()"
                                     class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
                             </div>
@@ -271,11 +274,11 @@ HTML_CONTENT = r"""<!DOCTYPE html>
         let currentLang = localStorage.getItem('drug_forecast_lang') || 'ar';
         let records = JSON.parse(localStorage.getItem('forecast_records') || '[]');
 
-        // Full Arabic / English Dictionary
+        // Full Arabic / English Dictionary with MediDemand Branding
         const translations = {
             ar: {
-                appTitle: "نظام التنبؤ باحتياجات الأدوية",
-                appSubtitle: "Drug Request Forecast Engine • Cloudflare Python",
+                appTitle: "MediDemand",
+                appSubtitle: "نظام التنبؤ الذكي بطلبيات واحتياجات الأدوية • Cloudflare Python",
                 langToggle: "English",
                 themeDark: "الوضع الليلي",
                 themeLight: "الوضع النهاري",
@@ -326,8 +329,8 @@ HTML_CONTENT = r"""<!DOCTYPE html>
                 csvHeader: "\uFEFFالتاريخ والوقت,اسم المنشأة,اسم المستخدم,اسم الصنف,متوسط الاستهلاك الشهري,الكمية الموصى بطلبها\n"
             },
             en: {
-                appTitle: "Drug Request Forecast System",
-                appSubtitle: "Healthcare Demand Forecasting Engine • Cloudflare Python",
+                appTitle: "MediDemand",
+                appSubtitle: "Intelligent Healthcare Drug Demand Forecasting Engine • Cloudflare Python",
                 langToggle: "العربية",
                 themeDark: "Dark Mode",
                 themeLight: "Light Mode",
@@ -497,6 +500,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
             if (currentAuthToken) {
                 document.getElementById('authBanner').classList.add('hidden');
                 document.getElementById('userBadge').classList.remove('hidden');
+                document.getElementById('currentUserName').textContent = 'مصرح';
             }
             renderTable();
             updateKPIs();
@@ -515,6 +519,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
                 localStorage.setItem('drug_forecast_pass', pass);
                 document.getElementById('authBanner').classList.add('hidden');
                 document.getElementById('userBadge').classList.remove('hidden');
+                document.getElementById('currentUserName').textContent = 'مصرح';
                 toggleAuthModal();
                 alert(t.toastLoginOk);
             }
@@ -636,7 +641,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `Drug_Forecast_${new Date().toISOString().slice(0,10)}.csv`;
+            link.download = `MediDemand_${new Date().toISOString().slice(0,10)}.csv`;
             link.click();
         }
 
@@ -695,7 +700,7 @@ async def on_fetch(request, env):
                 return Response.new(json.dumps(err_response), headers=headers, status=400)
         
         headers.set("Content-Type", "application/json")
-        return Response.new(json.dumps({"message": "Drug Forecast Python API Ready"}), headers=headers, status=200)
+        return Response.new(json.dumps({"message": "MediDemand Python API Ready"}), headers=headers, status=200)
 
     # Serve Main Frontend HTML
     headers.set("Content-Type", "text/html; charset=utf-8")

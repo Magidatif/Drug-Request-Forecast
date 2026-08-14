@@ -1,4 +1,4 @@
-# FastAPI Application for Drug Request Forecast
+# FastAPI Application for MediDemand
 # Designed for deployment locally, with Cloudflare Tunnel (cloudflared), or Docker
 import os
 import sqlite3
@@ -10,9 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
-    title="Drug Request Forecast System",
+    title="MediDemand",
     description="Hospital & Primary Care Healthcare Drug Forecasting Platform",
-    version="4.3.0"
+    version="4.4.0"
 )
 
 app.add_middleware(
@@ -83,7 +83,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drug Request Forecast - نظام توقع طلبات الأدوية</title>
+    <title>MediDemand - نظام التنبؤ باحتياجات الأدوية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -100,7 +100,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         };
     </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Cairo', 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
         .glass-header {
@@ -124,12 +124,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <header class="glass-header text-white sticky top-0 z-50 transition-colors duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10">
+                <div class="p-2.5 bg-white/10 dark:bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 shadow-inner">
                     <i class="fa-solid fa-pills text-2xl text-emerald-300"></i>
                 </div>
                 <div>
-                    <h1 id="i18n-appTitle" class="text-xl font-bold tracking-tight">نظام التنبؤ باحتياجات الأدوية</h1>
-                    <p id="i18n-appSubtitle" class="text-xs text-emerald-100/90 dark:text-emerald-200/80">Drug Request Forecast Engine • FastAPI + SQLite</p>
+                    <div class="flex items-center gap-2">
+                        <h1 id="i18n-appTitle" class="text-2xl font-black tracking-tight font-sans">MediDemand</h1>
+                        <span class="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono font-bold">PRO</span>
+                    </div>
+                    <p id="i18n-appSubtitle" class="text-xs text-emerald-100/90 dark:text-emerald-200/80">نظام التنبؤ الذكي بطلبيات واحتياجات الأدوية • FastAPI + SQLite</p>
                 </div>
             </div>
             
@@ -359,11 +362,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         let currentLang = localStorage.getItem('drug_forecast_lang') || 'ar';
         let records = [];
 
-        // Full Arabic / English Dictionary
+        // Full Arabic / English Dictionary with MediDemand Branding
         const translations = {
             ar: {
-                appTitle: "نظام التنبؤ باحتياجات الأدوية",
-                appSubtitle: "Drug Request Forecast Engine • FastAPI + SQLite",
+                appTitle: "MediDemand",
+                appSubtitle: "نظام التنبؤ الذكي بطلبيات واحتياجات الأدوية • FastAPI + SQLite",
                 langToggle: "English",
                 themeDark: "الوضع الليلي",
                 themeLight: "الوضع النهاري",
@@ -419,8 +422,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 csvHeader: "\uFEFFالتاريخ والوقت,اسم المنشأة,اسم المستخدم,اسم الصنف,متوسط الاستهلاك الشهري,الكمية الموصى بطلبها\n"
             },
             en: {
-                appTitle: "Drug Request Forecast System",
-                appSubtitle: "Healthcare Demand Forecasting Engine • FastAPI + SQLite",
+                appTitle: "MediDemand",
+                appSubtitle: "Intelligent Healthcare Drug Demand Forecasting Engine • FastAPI + SQLite",
                 langToggle: "العربية",
                 themeDark: "Dark Mode",
                 themeLight: "Light Mode",
@@ -818,7 +821,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `Drug_Forecast_${new Date().toISOString().slice(0,10)}.csv`;
+            link.download = `MediDemand_${new Date().toISOString().slice(0,10)}.csv`;
             link.click();
         }
 
