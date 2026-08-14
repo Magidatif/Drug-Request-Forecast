@@ -288,8 +288,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                             
                             <!-- Calculation summary breakdown -->
                             <div class="mt-2.5 pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 grid grid-cols-2 gap-2 text-[11px] text-emerald-800 dark:text-emerald-300">
-                                <div><span class="text-emerald-600 dark:text-emerald-400">متوسط الاستهلاك:</span> <span id="calcAvg" class="font-mono font-bold">0</span> / شهر</div>
-                                <div><span class="text-emerald-600 dark:text-emerald-400">الاستهلاك اليومي:</span> <span id="calcDaily" class="font-mono font-bold">0</span> / يوم</div>
+                                <div><span id="i18n-lblAvgMonthly" class="text-emerald-600 dark:text-emerald-400">متوسط الاستهلاك:</span> <span id="calcAvg" class="font-mono font-bold">0</span> <span id="i18n-unitMonth">/ شهر</span></div>
+                                <div><span id="i18n-lblDailyDemand" class="text-emerald-600 dark:text-emerald-400">الاستهلاك اليومي:</span> <span id="calcDaily" class="font-mono font-bold">0</span> <span id="i18n-unitDay">/ يوم</span></div>
                             </div>
                         </div>
 
@@ -490,6 +490,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 placeholderUser: "د. الصيدلي",
                 resultTitle: "الكمية المقترح طلبها (Recommended Order):",
                 resultUnit: "عبوة / وحدة",
+                lblAvgMonthly: "متوسط الاستهلاك:",
+                unitMonth: "/ شهر",
+                lblDailyDemand: "الاستهلاك اليومي:",
+                unitDay: "/ يوم",
+                badgeDaysCoverage: "تغطية {days} يوم ({lead} توريد + {safety} أمان)",
+                daysUnit: "يوم",
                 submitBtn: "حفظ وتأكيد الطلبية",
                 kpiTotalItems: "إجمالي الأصناف المسجلة",
                 kpiTotalQty: "إجمالي الكميات المطلوبة",
@@ -557,6 +563,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 placeholderUser: "Dr. Pharmacist",
                 resultTitle: "Recommended Order Quantity:",
                 resultUnit: "Packs / Units",
+                lblAvgMonthly: "Avg Consumption:",
+                unitMonth: "/ mo",
+                lblDailyDemand: "Daily Demand:",
+                unitDay: "/ day",
+                badgeDaysCoverage: "{days} Days Coverage ({lead} Lead + {safety} Safety)",
+                daysUnit: "Days",
                 submitBtn: "Save & Confirm Order",
                 kpiTotalItems: "Total Recorded Drugs",
                 kpiTotalQty: "Total Ordered Quantity",
@@ -658,6 +670,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             document.getElementById('i18n-resultTitle').textContent = t.resultTitle;
             document.getElementById('i18n-resultUnit').textContent = t.resultUnit;
+            const lblAvgEl = document.getElementById('i18n-lblAvgMonthly');
+            if (lblAvgEl) lblAvgEl.textContent = t.lblAvgMonthly;
+            const unitMoEl = document.getElementById('i18n-unitMonth');
+            if (unitMoEl) unitMoEl.textContent = t.unitMonth;
+            const lblDailyEl = document.getElementById('i18n-lblDailyDemand');
+            if (lblDailyEl) lblDailyEl.textContent = t.lblDailyDemand;
+            const unitDayEl = document.getElementById('i18n-unitDay');
+            if (unitDayEl) unitDayEl.textContent = t.unitDay;
             document.getElementById('i18n-submitBtn').textContent = t.submitBtn;
 
             document.getElementById('i18n-kpiTotalItems').textContent = t.kpiTotalItems;
@@ -675,6 +695,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('i18n-thStock').textContent = t.thStock;
             document.getElementById('i18n-thDays').textContent = t.thDays;
             document.getElementById('i18n-thRec').textContent = t.thRec;
+            liveUpdateCalculation();
 
             // Auth Modal translations
             document.getElementById('i18n-authModalTitle').textContent = t.authModalTitle;
@@ -892,10 +913,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             const res = computeForecast(m1, m2, m3, leadDays, safetyDays, stock);
 
+            const t = translations[currentLang];
             document.getElementById('liveResult').textContent = res.recommendedQty.toLocaleString('en-US');
             document.getElementById('calcAvg').textContent = res.avgMonthly.toLocaleString('en-US');
             document.getElementById('calcDaily').textContent = res.dailyDemand.toLocaleString('en-US');
-            document.getElementById('liveTotalDaysBadge').textContent = `تغطية ${res.totalDays} يوم (${leadDays} توريد + ${safetyDays} أمان)`;
+            
+            const badgeText = t.badgeDaysCoverage
+                .replace('{days}', res.totalDays)
+                .replace('{lead}', leadDays)
+                .replace('{safety}', safetyDays);
+            document.getElementById('liveTotalDaysBadge').textContent = badgeText;
         }
 
         function handleCalculate(e) {
@@ -983,7 +1010,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <td class="py-3 px-3 font-bold text-slate-900 dark:text-white font-sans">${r.drugName || '-'}</td>
                     <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono">${r.avgMonthly ?? '-'}</td>
                     <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono">${r.currentStock ?? '0'}</td>
-                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono">${r.totalDays || (r.leadDays + r.safetyDays) || '-'} يوم</td>
+                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono">${r.totalDays || (r.leadDays + r.safetyDays) || '-'} ${t.daysUnit}</td>
                     <td class="py-3 px-3 font-extrabold text-emerald-700 dark:text-emerald-400 text-sm font-mono">${r.recommendedQty ?? '-'}</td>
                 </tr>
             `).join('');
