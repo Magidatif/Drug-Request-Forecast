@@ -13,7 +13,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="MediDemand",
     description="Hospital & Primary Care Healthcare Drug Forecasting Platform - MAG Healthcare Solutions",
-    version="4.7.0"
+    version="4.8.0"
 )
 
 app.add_middleware(
@@ -89,8 +89,10 @@ class ForecastInput(BaseModel):
     avgMonthlyConsumption: Optional[float] = None
     current_stock: Optional[float] = 0.0
     currentStock: Optional[float] = 0.0
-    lead_time_months: Optional[float] = 1.5
-    leadMonths: Optional[float] = 1.5
+    lead_days: Optional[float] = None
+    leadDays: Optional[float] = None
+    lead_time_months: Optional[float] = None
+    leadMonths: Optional[float] = None
     safety_buffer_percent: Optional[float] = 10.0
     safetyBuffer: Optional[float] = 10.0
     auth_password: Optional[str] = None
@@ -103,8 +105,10 @@ class ForecastOutput(BaseModel):
     facility: Optional[str] = None
     drug: Optional[str] = None
 
-def calculate_forecast_logic(avg_monthly: float, current_stock: float = 0.0, lead_months: float = 1.5, safety_buffer_pct: float = 10.0) -> int:
-    raw_demand = avg_monthly * lead_months
+def calculate_forecast_logic(avg_monthly: float, current_stock: float = 0.0, lead_days: float = 45.0, safety_buffer_pct: float = 10.0) -> int:
+    # Daily consumption = Monthly / 30 days
+    daily_demand = avg_monthly / 30.0
+    raw_demand = daily_demand * lead_days
     safety_stock = raw_demand * (safety_buffer_pct / 100.0)
     total_needed = raw_demand + safety_stock
     net_order = total_needed - current_stock
@@ -280,9 +284,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">فترة التغطية (أشهر)</label>
-                                <input type="number" step="0.1" min="0.5" value="1.5" id="leadMonths" oninput="liveUpdateCalculation()"
-                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none">
+                                <label id="i18n-labelLead" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">فترة التغطية (بالأيام)</label>
+                                <input type="number" step="1" min="1" value="45" id="leadDays" oninput="liveUpdateCalculation()"
+                                    class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-darkinput border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition outline-none font-semibold">
                             </div>
                             <div>
                                 <label id="i18n-labelBuffer" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">مخزون الأمان (Buffer %)</label>
@@ -295,13 +299,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         <div class="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl mt-4 transition-colors">
                             <div class="text-xs text-emerald-800 dark:text-emerald-300 font-bold mb-1 flex items-center justify-between">
                                 <span id="i18n-resultTitle">الكمية المقترح طلبها (Recommended Order):</span>
-                                <span id="i18n-badgeFormula" class="text-[10px] bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">معادلة دقيقة</span>
+                                <span id="i18n-badgeFormula" class="text-[10px] bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">معادلة بالأيام</span>
                             </div>
                             <div class="flex items-baseline justify-between">
                                 <span id="liveResult" class="text-4xl font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">0</span>
                                 <span id="i18n-resultUnit" class="text-xs text-emerald-600 dark:text-emerald-300 font-bold">عبوة / وحدة</span>
                             </div>
-                            <p id="i18n-resultDesc" class="text-[11px] text-emerald-600 dark:text-emerald-400/80 mt-1.5">تراعي الاستهلاك الشهري، فترة التغطية، مخزون الأمان، وخصم الرصيد المتوفر.</p>
+                            <p id="i18n-resultDesc" class="text-[11px] text-emerald-600 dark:text-emerald-400/80 mt-1.5">تراعي الاستهلاك اليومي (الشهري ÷ 30)، فترة التغطية بالأيام، مخزون الأمان، وخصم الرصيد المتوفر.</p>
                         </div>
 
                         <button type="submit" id="submitBtn"
@@ -388,7 +392,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="flex items-center gap-2">
                 <img src="/logo.png" alt="MAG" class="h-5 w-5 object-contain">
                 <span class="font-bold text-slate-700 dark:text-slate-300">MAG Healthcare Solutions</span>
-                <span>• MediDemand v4.7</span>
+                <span>• MediDemand v4.8</span>
             </div>
             <div>
                 <span>جميع الحقوق محفوظة © 2026</span>
@@ -505,12 +509,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 placeholderDrug: "مثال: Ceftriaxone 1g Vial",
                 labelAvgMonthly: "متوسط الاستهلاك الشهري",
                 labelStock: "الرصيد الحالي بالمخزن",
-                labelLead: "فترة التغطية (أشهر)",
+                labelLead: "فترة التغطية (بالأيام)",
                 labelBuffer: "مخزون الأمان (Buffer %)",
                 resultTitle: "الكمية المقترح طلبها (Recommended Order):",
-                badgeFormula: "معادلة دقيقة",
+                badgeFormula: "معادلة بالأيام",
                 resultUnit: "عبوة / وحدة",
-                resultDesc: "تراعي الاستهلاك الشهري، فترة التغطية، مخزون الأمان، وخصم الرصيد المتوفر.",
+                resultDesc: "تراعي الاستهلاك اليومي (الشهري ÷ 30)، فترة التغطية بالأيام، مخزون الأمان، وخصم الرصيد المتوفر.",
                 submitBtn: "حفظ وتأكيد الطلبية في قاعدة البيانات",
                 kpiTotalItems: "إجمالي الأصناف المسجلة",
                 kpiTotalQty: "إجمالي الكميات المطلوبة",
@@ -574,12 +578,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 placeholderDrug: "e.g. Ceftriaxone 1g Vial",
                 labelAvgMonthly: "Avg Monthly Consumption",
                 labelStock: "Current Stock on Hand",
-                labelLead: "Lead / Coverage Time (Months)",
+                labelLead: "Coverage Time (Days)",
                 labelBuffer: "Safety Buffer (%)",
                 resultTitle: "Recommended Order Quantity:",
-                badgeFormula: "Exact Formula",
+                badgeFormula: "Days Formula",
                 resultUnit: "Packs / Units",
-                resultDesc: "Accounts for monthly demand, lead coverage, safety stock minus current inventory.",
+                resultDesc: "Accounts for daily demand (monthly ÷ 30), coverage days, safety stock minus current inventory.",
                 submitBtn: "Save & Confirm Order to Database",
                 kpiTotalItems: "Total Recorded Drugs",
                 kpiTotalQty: "Total Ordered Quantity",
@@ -870,7 +874,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         async function handleGoogleSignIn() {
             const t = translations[currentLang];
-            // Interactive prompt for demo / one-click Google Sign-in flow
             const promptEmail = prompt(currentLang === 'ar' ? 'أدخل بريدك الإلكتروني لحساب Google للمتابعة:' : 'Enter your Google Account email to continue:', 'dr.magid.atif@gmail.com');
             if (!promptEmail) return;
 
@@ -970,9 +973,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             showToast(t.toastLogoutOk);
         }
 
-        function computeForecast(avgMonthly, currentStock, leadMonths, safetyBufferPercent) {
-            const rawDemand = (avgMonthly * leadMonths);
-            const safetyStock = rawDemand * (safetyBufferPercent / 100);
+        // New Precise Days-Based Formula
+        function computeForecast(avgMonthly, currentStock, leadDays, safetyBufferPercent) {
+            const dailyDemand = avgMonthly / 30.0;
+            const rawDemand = dailyDemand * leadDays;
+            const safetyStock = rawDemand * (safetyBufferPercent / 100.0);
             const totalRequired = rawDemand + safetyStock;
             const netOrder = totalRequired - currentStock;
             return Math.max(0, Math.round(netOrder));
@@ -981,9 +986,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function liveUpdateCalculation() {
             const avg = parseFloat(document.getElementById('avgMonthly').value) || 0;
             const stock = parseFloat(document.getElementById('currentStock').value) || 0;
-            const months = parseFloat(document.getElementById('leadMonths').value) || 1.5;
+            const days = parseFloat(document.getElementById('leadDays').value) || 45;
             const buffer = parseFloat(document.getElementById('safetyBuffer').value) || 10;
-            const result = computeForecast(avg, stock, months, buffer);
+            const result = computeForecast(avg, stock, days, buffer);
             const resEl = document.getElementById('liveResult');
             if (resEl) resEl.textContent = result.toLocaleString('en-US');
         }
@@ -995,9 +1000,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const drug = document.getElementById('drugName').value.trim();
             const avg = parseFloat(document.getElementById('avgMonthly').value) || 0;
             const stock = parseFloat(document.getElementById('currentStock').value) || 0;
-            const months = parseFloat(document.getElementById('leadMonths').value) || 1.5;
+            const days = parseFloat(document.getElementById('leadDays').value) || 45;
             const buffer = parseFloat(document.getElementById('safetyBuffer').value) || 10;
-            const recQty = computeForecast(avg, stock, months, buffer);
+            const recQty = computeForecast(avg, stock, days, buffer);
             const t = translations[currentLang];
 
             const payload = {
@@ -1006,7 +1011,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 drug_name: drug,
                 avg_monthly_consumption: avg,
                 current_stock: stock,
-                lead_time_months: months,
+                lead_days: days,
                 safety_buffer_percent: buffer
             };
 
@@ -1216,14 +1221,26 @@ async def create_forecast(data: ForecastInput):
     drug = data.drug_name or data.drugName or "Unspecified Drug / صنف غير محدد"
     avg_monthly = data.avg_monthly_consumption if data.avg_monthly_consumption is not None else (data.avgMonthlyConsumption or 0.0)
     current_stock = data.current_stock if data.current_stock is not None else (data.currentStock or 0.0)
-    lead_months = data.lead_time_months if data.lead_time_months is not None else (data.leadMonths or 1.5)
+    
+    # Check lead days first, or convert months to days if provided
+    if data.lead_days is not None:
+        lead_days = float(data.lead_days)
+    elif data.leadDays is not None:
+        lead_days = float(data.leadDays)
+    elif data.lead_time_months is not None:
+        lead_days = float(data.lead_time_months) * 30.0
+    elif data.leadMonths is not None:
+        lead_days = float(data.leadMonths) * 30.0
+    else:
+        lead_days = 45.0
+
     safety_buffer = data.safety_buffer_percent if data.safety_buffer_percent is not None else (data.safetyBuffer or 10.0)
 
-    # Calculate recommended quantity
+    # Calculate recommended quantity using Days formula
     rec_qty = calculate_forecast_logic(
         avg_monthly,
         current_stock,
-        lead_months,
+        lead_days,
         safety_buffer
     )
     
