@@ -202,8 +202,8 @@
 
                         <button type="submit" id="submitBtn"
                             class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
-                            <i class="fa-solid fa-cloud-arrow-up"></i>
-                            <span id="i18n-submitBtn">حفظ وتأكيد الطلبية في قاعدة البيانات</span>
+                            <i class="fa-solid fa-check-double"></i>
+                            <span id="i18n-submitBtn">حفظ وتأكيد الطلبية</span>
                         </button>
                     </form>
                 </div>
@@ -222,9 +222,9 @@
                         <div id="totalQtySum" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">0</div>
                     </div>
                     <div class="bg-white dark:bg-darkcard p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm stat-card">
-                        <div id="i18n-kpiDbStatus" class="text-slate-400 dark:text-slate-400 text-xs font-bold mb-1">قاعدة البيانات المحلية</div>
+                        <div id="i18n-kpiDbStatus" class="text-slate-400 dark:text-slate-400 text-xs font-bold mb-1">حالة النظام الذكي</div>
                         <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 mt-2">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span id="i18n-dbOnline">SQLite متصلة</span>
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span id="i18n-dbOnline">جاهز للعمل • Active</span>
                         </div>
                     </div>
                 </div>
@@ -284,7 +284,7 @@
             <div class="flex items-center gap-2">
                 <img src="/logo.png" alt="MAG" class="h-5 w-5 object-contain">
                 <span class="font-bold text-slate-700 dark:text-slate-300">MAG Healthcare Solutions</span>
-                <span>• MediDemand v4.9</span>
+                <span>• MediDemand v5.0</span>
             </div>
             <div>
                 <span>جميع الحقوق محفوظة © 2026</span>
@@ -377,7 +377,7 @@
         let currentLang = localStorage.getItem('drug_forecast_lang') || 'ar';
         let currentUser = JSON.parse(localStorage.getItem('medi_demand_user') || 'null');
         let currentAuthTab = 'login';
-        let records = [];
+        let records = JSON.parse(localStorage.getItem('forecast_records') || '[]');
 
         // Full Arabic / English Dictionary with MediDemand Branding
         const translations = {
@@ -408,16 +408,16 @@
                 badgeFormula: "معادلة بالأيام",
                 resultUnit: "عبوة / وحدة",
                 resultDesc: "تراعي الاستهلاك اليومي (الشهري ÷ 30)، فترة التغطية بالأيام، مخزون الأمان، وخصم الرصيد المتوفر.",
-                submitBtn: "حفظ وتأكيد الطلبية في قاعدة البيانات",
+                submitBtn: "حفظ وتأكيد الطلبية",
                 kpiTotalItems: "إجمالي الأصناف المسجلة",
                 kpiTotalQty: "إجمالي الكميات المطلوبة",
-                kpiDbStatus: "قاعدة البيانات المحلية",
-                dbOnline: "SQLite متصلة",
+                kpiDbStatus: "حالة النظام الذكي",
+                dbOnline: "جاهز للعمل • Active",
                 historyTitle: "سجل الطلبيات والتوقعات المحفوظة",
                 searchPlaceholder: "بحث عن صنف أو منشأة...",
                 exportBtn: "تصدير CSV",
                 clearBtn: "مسح السجلات",
-                confirmClear: "هل أنت متأكد من رغبتك في مسح كافة السجلات المحفوظة في قاعدة البيانات؟",
+                confirmClear: "هل أنت متأكد من رغبتك في مسح كافة السجلات المحفوظة؟",
                 clearOkToast: "تم مسح كافة البيانات بنجاح",
                 thTime: "Date & Time",
                 thFacility: "المنشأة",
@@ -448,9 +448,8 @@
                 toastDrugMustBeEnglish: "يرجى كتابة اسم الصنف باللغة الإنجليزية فقط (English Letters Only)",
                 
                 toastSavedOk: "تم حفظ طلبية الصنف ({drug}) بكمية مقترحة: {qty}",
-                toastSavedLocal: "تم الحفظ محلياً (تعذر الاتصال بالخادم)",
                 exportNoData: "لا توجد بيانات لتصديرها",
-                csvHeader: "\uFEFFالتاريخ والوقت,اسم المنشأة,اسم المستخدم,اسم الصنف,متوسط الاستهلاك الشهري,الكمية الموصى بطلبها\n"
+                csvHeader: "\uFEFFDate & Time,Facility Name,User Name,Drug Name,Avg Monthly Consumption,Recommended Quantity\n"
             },
             en: {
                 appTitle: "MediDemand",
@@ -479,16 +478,16 @@
                 badgeFormula: "Days Formula",
                 resultUnit: "Packs / Units",
                 resultDesc: "Accounts for daily demand (monthly ÷ 30), coverage days, safety stock minus current inventory.",
-                submitBtn: "Save & Confirm Order to Database",
+                submitBtn: "Save & Confirm Order",
                 kpiTotalItems: "Total Recorded Drugs",
                 kpiTotalQty: "Total Ordered Quantity",
-                kpiDbStatus: "Local Database",
-                dbOnline: "SQLite Connected",
+                kpiDbStatus: "Smart Engine Status",
+                dbOnline: "Ready • Active",
                 historyTitle: "Saved Drug Forecasts & Orders History",
                 searchPlaceholder: "Search drug or facility...",
                 exportBtn: "Export CSV",
                 clearBtn: "Clear Records",
-                confirmClear: "Are you sure you want to delete all saved records from the database?",
+                confirmClear: "Are you sure you want to clear all recorded orders?",
                 clearOkToast: "All records cleared successfully",
                 thTime: "Date & Time",
                 thFacility: "Facility",
@@ -496,7 +495,7 @@
                 thDrug: "Drug Item",
                 thAvg: "Avg Monthly",
                 thRec: "Recommended Qty",
-                loadingRows: "Loading records from database...",
+                loadingRows: "Loading records...",
                 emptyRows: "No orders recorded yet",
                 noMatchRows: "No matching records found",
                 
@@ -519,7 +518,6 @@
                 toastDrugMustBeEnglish: "Drug name must be in English letters only",
 
                 toastSavedOk: "Order saved for ({drug}) with recommended qty: {qty}",
-                toastSavedLocal: "Saved locally (server offline)",
                 exportNoData: "No data available to export",
                 csvHeader: "\uFEFFDate & Time,Facility Name,User Name,Drug Name,Avg Monthly Consumption,Recommended Quantity\n"
             }
@@ -700,54 +698,28 @@
             }
         }
 
-        async function initApp() {
+        function initApp() {
             setLanguage(currentLang);
             initTheme();
             updateAuthStateUI();
-            await refreshData();
-        }
-
-        async function refreshData() {
-            try {
-                const res = await fetch('/api/requests');
-                if (res.ok) {
-                    const data = await res.json();
-                    records = data.map(r => ({
-                        id: r.id,
-                        timestamp: r.timestamp,
-                        facilityName: r.facility_name,
-                        userName: r.user_name,
-                        drugName: r.drug_name,
-                        avgMonthlyConsumption: r.avg_monthly,
-                        currentStock: r.current_stock,
-                        recommendedQty: r.recommended_qty
-                    }));
-                }
-            } catch (err) {
-                console.warn('Using local cache if backend unavailable:', err);
-                records = JSON.parse(localStorage.getItem('forecast_records') || '[]');
-            }
             renderTable();
             updateKPIs();
         }
 
-        async function clearAllData() {
+        function refreshData() {
+            records = JSON.parse(localStorage.getItem('forecast_records') || '[]');
+            renderTable();
+            updateKPIs();
+        }
+
+        function clearAllData() {
             const t = translations[currentLang];
             if (!confirm(t.confirmClear)) return;
 
-            // Immediately wipe records from memory and local storage
             records = [];
             localStorage.removeItem('forecast_records');
             renderTable();
             updateKPIs();
-
-            // Notify backend if available
-            try {
-                await fetch('/api/requests', { method: 'DELETE' });
-            } catch (err) {
-                console.log('Cleared local storage cache');
-            }
-
             showToast(t.clearOkToast);
         }
 
@@ -777,7 +749,7 @@
             }
         }
 
-        async function handleGoogleSignIn() {
+        function handleGoogleSignIn() {
             const t = translations[currentLang];
             const promptEmail = prompt(currentLang === 'ar' ? 'أدخل بريدك الإلكتروني لحساب Google للمتابعة:' : 'Enter your Google Account email to continue:', 'dr.magid.atif@gmail.com');
             if (!promptEmail) return;
@@ -785,89 +757,34 @@
             const nameParts = promptEmail.split('@')[0].replace('.', ' ');
             const formattedName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1);
 
-            const payload = {
+            currentUser = {
                 email: promptEmail,
                 name: formattedName,
                 provider: 'google'
             };
 
-            try {
-                const res = await fetch('/api/auth/google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                currentUser = data.user || payload;
-                localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
-                updateAuthStateUI();
-                toggleAuthModal();
-                showToast(t.toastLoginOk.replace('{name}', currentUser.name));
-            } catch (err) {
-                currentUser = payload;
-                localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
-                updateAuthStateUI();
-                toggleAuthModal();
-                showToast(t.toastLoginOk.replace('{name}', currentUser.name));
-            }
+            localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+            updateAuthStateUI();
+            toggleAuthModal();
+            showToast(t.toastLoginOk.replace('{name}', currentUser.name));
         }
 
-        async function handleEmailAuth(e) {
+        function handleEmailAuth(e) {
             e.preventDefault();
             const t = translations[currentLang];
             const email = document.getElementById('authEmailInput').value.trim();
-            const password = document.getElementById('authPassInput').value.trim();
             const name = document.getElementById('authNameInput').value.trim() || email.split('@')[0];
 
-            if (currentAuthTab === 'register') {
-                try {
-                    const res = await fetch('/api/auth/register', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, email, password })
-                    });
-                    const data = await res.json();
-                    if (res.ok) {
-                        currentUser = data.user;
-                        localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
-                        updateAuthStateUI();
-                        toggleAuthModal();
-                        showToast(t.toastRegisterOk);
-                    } else {
-                        showToast(data.detail || 'Registration failed', true);
-                    }
-                } catch (err) {
-                    currentUser = { name, email, provider: 'email' };
-                    localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
-                    updateAuthStateUI();
-                    toggleAuthModal();
-                    showToast(t.toastRegisterOk);
-                }
-            } else {
-                try {
-                    const res = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password })
-                    });
-                    const data = await res.json();
-                    if (res.ok) {
-                        currentUser = data.user;
-                        localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
-                        updateAuthStateUI();
-                        toggleAuthModal();
-                        showToast(t.toastLoginOk.replace('{name}', currentUser.name));
-                    } else {
-                        showToast(data.detail || 'Invalid email or password', true);
-                    }
-                } catch (err) {
-                    currentUser = { name: email.split('@')[0], email, provider: 'email' };
-                    localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
-                    updateAuthStateUI();
-                    toggleAuthModal();
-                    showToast(t.toastLoginOk.replace('{name}', currentUser.name));
-                }
-            }
+            currentUser = {
+                name: name,
+                email: email,
+                provider: 'email'
+            };
+
+            localStorage.setItem('medi_demand_user', JSON.stringify(currentUser));
+            updateAuthStateUI();
+            toggleAuthModal();
+            showToast(currentAuthTab === 'register' ? t.toastRegisterOk : t.toastLoginOk.replace('{name}', currentUser.name));
         }
 
         function handleLogout() {
@@ -898,7 +815,7 @@
             if (resEl) resEl.textContent = result.toLocaleString('en-US');
         }
 
-        async function handleCalculate(e) {
+        function handleCalculate(e) {
             e.preventDefault();
             const facility = document.getElementById('facilityName').value.trim();
             const user = document.getElementById('userName').value.trim();
@@ -921,48 +838,27 @@
             }
 
             const recQty = computeForecast(avg, stock, days, buffer);
+            const now = new Date();
+            const pad = n => (n < 10 ? '0' + n : n);
+            const timestampStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-            const payload = {
-                facility_name: facility,
-                user_name: user,
-                drug_name: drug,
-                avg_monthly_consumption: avg,
-                current_stock: stock,
-                lead_days: days,
-                safety_buffer_percent: buffer
+            const localItem = {
+                timestamp: timestampStr,
+                facilityName: facility,
+                userName: user,
+                drugName: drug,
+                avgMonthlyConsumption: avg,
+                currentStock: stock,
+                recommendedQty: recQty
             };
 
-            try {
-                const res = await fetch('/api/forecast', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    showToast(data.detail || 'Error saving order', true);
-                    return;
-                }
-                const msg = t.toastSavedOk.replace('{drug}', drug).replace('{qty}', data.recommended_qty);
-                showToast(msg);
-                await refreshData();
-            } catch (err) {
-                console.error('Error saving to server:', err);
-                showToast(t.toastSavedLocal, true);
-                const localItem = {
-                    timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-                    facilityName: facility,
-                    userName: user,
-                    drugName: drug,
-                    avgMonthlyConsumption: avg,
-                    currentStock: stock,
-                    recommendedQty: recQty
-                };
-                records.unshift(localItem);
-                localStorage.setItem('forecast_records', JSON.stringify(records));
-                renderTable();
-                updateKPIs();
-            }
+            records.unshift(localItem);
+            localStorage.setItem('forecast_records', JSON.stringify(records));
+            renderTable();
+            updateKPIs();
+
+            const msg = t.toastSavedOk.replace('{drug}', drug).replace('{qty}', recQty);
+            showToast(msg);
 
             document.getElementById('drugName').value = '';
             const errEl = document.getElementById('drugNameError');
