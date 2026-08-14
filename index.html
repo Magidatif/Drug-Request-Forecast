@@ -212,7 +212,7 @@
             <!-- Stats & Historical Submissions -->
             <div class="lg:col-span-7 space-y-6">
                 <!-- KPI Mini Cards -->
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white dark:bg-darkcard p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm stat-card">
                         <div id="i18n-kpiTotalItems" class="text-slate-400 dark:text-slate-400 text-xs font-bold mb-1">إجمالي الأصناف المسجلة</div>
                         <div id="totalItemsCount" class="text-2xl font-black text-slate-800 dark:text-white font-mono">0</div>
@@ -220,12 +220,6 @@
                     <div class="bg-white dark:bg-darkcard p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm stat-card">
                         <div id="i18n-kpiTotalQty" class="text-slate-400 dark:text-slate-400 text-xs font-bold mb-1">إجمالي الكميات المطلوبة</div>
                         <div id="totalQtySum" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">0</div>
-                    </div>
-                    <div class="bg-white dark:bg-darkcard p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm stat-card">
-                        <div id="i18n-kpiDbStatus" class="text-slate-400 dark:text-slate-400 text-xs font-bold mb-1">حالة النظام الذكي</div>
-                        <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 mt-2">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span id="i18n-dbOnline">جاهز للعمل • Active</span>
-                        </div>
                     </div>
                 </div>
 
@@ -581,8 +575,6 @@
 
             document.getElementById('i18n-kpiTotalItems').textContent = t.kpiTotalItems;
             document.getElementById('i18n-kpiTotalQty').textContent = t.kpiTotalQty;
-            document.getElementById('i18n-kpiDbStatus').textContent = t.kpiDbStatus;
-            document.getElementById('i18n-dbOnline').textContent = t.dbOnline;
 
             document.getElementById('i18n-historyTitle').textContent = t.historyTitle;
             document.getElementById('tableSearch').placeholder = t.searchPlaceholder;
