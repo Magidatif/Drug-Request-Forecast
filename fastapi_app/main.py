@@ -374,7 +374,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         <table class="w-full text-xs">
                             <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                                 <tr>
-                                    <th id="i18n-thTime" class="py-3 px-3">التاريخ والوقت</th>
+                                    <th id="i18n-thTime" class="py-3 px-3">Date & Time</th>
                                     <th id="i18n-thFacility" class="py-3 px-3">المنشأة</th>
                                     <th id="i18n-thUser" class="py-3 px-3">المستخدم</th>
                                     <th id="i18n-thDrug" class="py-3 px-3">الصنف</th>
@@ -535,7 +535,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 clearBtn: "مسح السجلات",
                 confirmClear: "هل أنت متأكد من رغبتك في مسح كافة السجلات المحفوظة في قاعدة البيانات؟",
                 clearOkToast: "تم مسح كافة البيانات بنجاح",
-                thTime: "التاريخ والوقت",
+                thTime: "Date & Time",
                 thFacility: "المنشأة",
                 thUser: "المستخدم",
                 thDrug: "الصنف",
@@ -1070,7 +1070,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 console.error('Error saving to server:', err);
                 showToast(t.toastSavedLocal, true);
                 const localItem = {
-                    timestamp: new Date().toLocaleString(currentLang === 'ar' ? 'ar-EG' : 'en-US'),
+                    timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
                     facilityName: facility,
                     userName: user,
                     drugName: drug,
@@ -1111,7 +1111,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             tbody.innerHTML = filtered.map(r => `
                 <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/50 transition">
-                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">${r.timestamp || '-'}</td>
+                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]" dir="ltr">${r.timestamp || '-'}</td>
                     <td class="py-3 px-3 font-semibold text-slate-800 dark:text-slate-100">${r.facilityName || '-'}</td>
                     <td class="py-3 px-3 text-slate-600 dark:text-slate-300">${r.userName || '-'}</td>
                     <td class="py-3 px-3 font-bold text-slate-900 dark:text-white font-sans">${r.drugName || '-'}</td>
